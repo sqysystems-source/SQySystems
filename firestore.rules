@@ -1,0 +1,31 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Each user may read and write ONLY their own profile document: users/{uid}
+    match /users/{userId} {
+
+      // Read own document only
+      allow read: if request.auth != null && request.auth.uid == userId;
+
+      // Create own document only; the stored uid must match the signed-in user
+      allow create: if request.auth != null
+                    && request.auth.uid == userId
+                    && request.resource.data.uid == request.auth.uid;
+
+      // Update own document only; the uid field can never be changed
+      allow update: if request.auth != null
+                    && request.auth.uid == userId
+                    && request.resource.data.uid == resource.data.uid;
+
+      // Users cannot delete profile documents from the client
+      allow delete: if false;
+    }
+
+    // Deny everything else by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

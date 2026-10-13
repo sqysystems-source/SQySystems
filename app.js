@@ -1,0 +1,534 @@
+/**
+ * SQySystems — Application logic
+ * Vanilla ES6+ modules, Firebase Web SDK v10 (modular).
+ *
+ * Structure:
+ *   1. Utilities        – DOM helpers, formatters
+ *   2. Toast            – lightweight notifications
+ *   3. Modal            – accessible dialogs (focus trap, ESC, backdrop)
+ *   4. Site UI          – navbar, scroll effects, reveal animations, counters
+ *   5. AuthService      – Firebase Auth + Firestore profile operations
+ *   6. View             – renders guest / signed-in UI state
+ *   7. Controllers      – forms (login, signup, profile)
+ *   8. Bootstrap        – wires everything and starts onAuthStateChanged
+ */
+import { auth, db, isFirebaseConfigured } from "./firebase-config.js";
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  sendPasswordResetEmail,
+  updateProfile,
+  onAuthStateChanged,
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  serverTimestamp,
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+/* ============================================================
+   1. Utilities
+   ============================================================ */
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+const formatDate = (value) => {
+  const date = value?.toDate ? value.toDate() : value ? new Date(value) : null;
+  return date && !isNaN(date)
+    ? date.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })
+    : "—";
+};
+
+const firstName = (name = "") => name.trim().split(/\s+/)[0] || "there";
+
+const AUTH_ERRORS = {
+  "auth/email-already-in-use": "An account with this email already exists.",
+  "auth/invalid-email": "Please enter a valid email address.",
+  "auth/weak-password": "Password is too weak — use at least 6 characters.",
+  "auth/user-not-found": "Incorrect email or password.",
+  "auth/wrong-password": "Incorrect email or password.",
+  "auth/invalid-credential": "Incorrect email or password.",
+  "auth/too-many-requests": "Too many attempts. Please wait a moment and try again.",
+  "auth/network-request-failed": "Network error. Check your connection and try again.",
+  "auth/operation-not-allowed": "Email/Password sign-in is not enabled in Firebase.",
+  "permission-denied": "Permission denied. Check your Firestore security rules.",
+};
+const friendlyError = (err) =>
+  AUTH_ERRORS[err?.code] || "Something went wrong. Please try again.";
+
+function setLoading(button, loading) {
+  button.classList.toggle("is-loading", loading);
+  button.disabled = loading;
+}
+
+function setMessage(el, text = "", type = "error") {
+  el.textContent = text;
+  el.classList.toggle("is-error", Boolean(text) && type === "error");
+  el.classList.toggle("is-success", Boolean(text) && type === "success");
+}
+
+function markInvalid(input, invalid) {
+  input.setAttribute("aria-invalid", invalid ? "true" : "false");
+}
+
+/* ============================================================
+   2. Toast
+   ============================================================ */
+const Toast = {
+  show(message, type = "info", duration = 4000) {
+    const region = $("#toasts");
+    const el = document.createElement("div");
+    el.className = `toast${type === "error" ? " toast--error" : ""}`;
+    el.textContent = message;
+    region.appendChild(el);
+    setTimeout(() => {
+      el.classList.add("is-leaving");
+      el.addEventListener("animationend", () => el.remove(), { once: true });
+    }, duration);
+  },
+};
+
+/* ============================================================
+   3. Modal
+   ============================================================ */
+const Modal = (() => {
+  let active = null;
+  let lastFocus = null;
+  const FOCUSABLE = 'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
+  function open(id) {
+    const modal = document.getElementById(id);
+    if (!modal) return;
+    if (active && active !== modal) close(active, false);
+    lastFocus = document.activeElement;
+    modal.hidden = false;
+    document.body.classList.add("modal-open");
+    active = modal;
+    requestAnimationFrame(() => $("input", modal)?.focus());
+  }
+
+  function close(modal = active, restoreFocus = true) {
+    if (!modal) return;
+    modal.hidden = true;
+    $$("form", modal).forEach((f) => {
+      f.reset();
+      $$(".form__msg", f).forEach((m) => setMessage(m));
+      $$("input", f).forEach((i) => markInvalid(i, false));
+    });
+    if (active === modal) {
+      active = null;
+      document.body.classList.remove("modal-open");
+      if (restoreFocus) lastFocus?.focus?.();
+    }
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (!active) return;
+    if (e.key === "Escape") return close();
+    if (e.key === "Tab") {
+      const items = $$(FOCUSABLE, active).filter((el) => !el.hidden && el.offsetParent !== null);
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  });
+
+  return { open, close };
+})();
+
+/* ============================================================
+   4. Site UI (navbar, reveal, counters, misc)
+   ============================================================ */
+const SiteUI = {
+  init() {
+    document.documentElement.classList.add("js");
+    $("#year").textContent = new Date().getFullYear();
+    this.logoFallback();
+    this.navbar();
+    this.reveal();
+    this.scrollSpy();
+  },
+
+  logoFallback() {
+    // If logo.png is missing, hide the broken image and keep the text wordmark.
+    const img = $("#brandLogo");
+    img?.addEventListener("error", () => (img.style.display = "none"));
+  },
+
+  navbar() {
+    const navbar = $("#navbar");
+    const nav = $("#nav");
+    const burger = $("#burger");
+
+    const onScroll = () => navbar.classList.toggle("is-scrolled", window.scrollY > 8);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+
+    const setOpen = (open) => {
+      nav.classList.toggle("is-open", open);
+      burger.setAttribute("aria-expanded", String(open));
+    };
+    burger.addEventListener("click", () => setOpen(!nav.classList.contains("is-open")));
+    nav.addEventListener("click", (e) => {
+      if (e.target.closest("a, button")) setOpen(false);
+    });
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest("#nav, #burger")) setOpen(false);
+    });
+    window.matchMedia("(min-width: 900px)").addEventListener("change", () => setOpen(false));
+  },
+
+  reveal() {
+    const items = $$(".reveal");
+    // Stagger siblings inside grids
+    $$(".cards, .steps, .hero__stats").forEach((group) =>
+      $$(".reveal", group).forEach((el, i) => el.style.setProperty("--d", `${i * 0.08}s`))
+    );
+    $$(".hero__inner > .reveal").forEach((el, i) => el.style.setProperty("--d", `${i * 0.08}s`));
+
+    if (!("IntersectionObserver" in window)) {
+      items.forEach((el) => el.classList.add("is-visible"));
+      this.counters();
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+            io.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.12, rootMargin: "0px 0px -40px 0px" }
+    );
+    items.forEach((el) => io.observe(el));
+    this.counters();
+  },
+
+  counters() {
+    const els = $$("[data-count]");
+    const run = (el) => {
+      const target = Number(el.dataset.count);
+      const suffix = el.dataset.suffix || "";
+      const duration = 1400;
+      const start = performance.now();
+      const tick = (now) => {
+        const p = Math.min((now - start) / duration, 1);
+        const eased = 1 - Math.pow(1 - p, 3);
+        el.textContent = Math.round(target * eased) + suffix;
+        if (p < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    };
+    if (!("IntersectionObserver" in window)) return els.forEach(run);
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (e.isIntersecting) { run(e.target); io.unobserve(e.target); }
+      });
+    }, { threshold: 0.6 });
+    els.forEach((el) => io.observe(el));
+  },
+
+  scrollSpy() {
+    const links = $$(".nav__link[href^='#']");
+    const map = new Map(links.map((l) => [l.getAttribute("href").slice(1), l]));
+    if (!("IntersectionObserver" in window)) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          links.forEach((l) => l.classList.remove("is-active"));
+          map.get(entry.target.id)?.classList.add("is-active");
+        });
+      },
+      { rootMargin: "-45% 0px -50% 0px" }
+    );
+    map.forEach((_, id) => {
+      const sec = document.getElementById(id);
+      if (sec) io.observe(sec);
+    });
+  },
+};
+
+/* ============================================================
+   5. AuthService — Firebase Auth + Firestore
+   ============================================================ */
+const AuthService = {
+  /** Create the auth user, set display name, then store the profile in users/{uid}. */
+  async signUp({ name, email, password }) {
+    const cred = await createUserWithEmailAndPassword(auth, email, password);
+    const { user } = cred;
+    await updateProfile(user, { displayName: name });
+
+    await setDoc(doc(db, "users", user.uid), {
+      uid: user.uid,
+      displayName: name,
+      email: user.email,
+      company: "",
+      role: "client",
+      createdAt: serverTimestamp(),
+      lastLoginAt: serverTimestamp(),
+    });
+    return user;
+  },
+
+  login(email, password) {
+    return signInWithEmailAndPassword(auth, email, password);
+  },
+
+  logout() {
+    return signOut(auth);
+  },
+
+  resetPassword(email) {
+    return sendPasswordResetEmail(auth, email);
+  },
+
+  async getProfile(uid) {
+    const snap = await getDoc(doc(db, "users", uid));
+    return snap.exists() ? snap.data() : null;
+  },
+
+  updateCompany(uid, company) {
+    return updateDoc(doc(db, "users", uid), { company });
+  },
+
+  touchLastLogin(uid) {
+    return updateDoc(doc(db, "users", uid), { lastLoginAt: serverTimestamp() });
+  },
+};
+
+/* ============================================================
+   6. View — renders guest / authenticated state
+   ============================================================ */
+const View = {
+  renderGuest() {
+    $$("[data-guest-only]").forEach((el) => (el.hidden = false));
+    $$("[data-user-only], .is-auth-only").forEach((el) => (el.hidden = true));
+    $("#dashboard").hidden = true;
+    $("#navWelcome").textContent = "";
+  },
+
+  renderUser(user, profile) {
+    const name = profile?.displayName || user.displayName || user.email.split("@")[0];
+
+    $$("[data-guest-only]").forEach((el) => (el.hidden = true));
+    $$("[data-user-only], .is-auth-only").forEach((el) => (el.hidden = false));
+    $("#navWelcome").textContent = `Welcome, ${firstName(name)}`;
+
+    $("#dashboard").hidden = false;
+    $("#dashWelcome").textContent = `Welcome, ${name}`;
+    $("#dashName").textContent = name;
+    $("#dashEmail").textContent = user.email;
+    $("#dashCompany").textContent = profile?.company || "Not set";
+    $("#dashSince").textContent = formatDate(profile?.createdAt || user.metadata?.creationTime);
+    $("#dashUid").textContent = user.uid;
+    $("#companyInput").value = profile?.company || "";
+  },
+};
+
+/* ============================================================
+   7. Controllers
+   ============================================================ */
+const state = {
+  user: null,
+  profile: null,
+  signingUp: false, // prevents the auth observer from racing the profile write
+};
+
+async function refreshProfile(user) {
+  try {
+    state.profile = await AuthService.getProfile(user.uid);
+  } catch (err) {
+    console.warn("[SQySystems] Could not load profile:", err.code || err);
+    state.profile = null;
+  }
+  View.renderUser(user, state.profile);
+}
+
+function initModalTriggers() {
+  document.addEventListener("click", (e) => {
+    const openBtn = e.target.closest("[data-open-modal]");
+    if (openBtn) return Modal.open(openBtn.dataset.openModal);
+
+    const switchBtn = e.target.closest("[data-switch-modal]");
+    if (switchBtn) return Modal.open(switchBtn.dataset.switchModal);
+
+    if (e.target.closest("[data-close-modal]")) return Modal.close();
+
+    if (e.target.closest("[data-logout]")) handleLogout();
+  });
+}
+
+function guardConfig(msgEl) {
+  if (isFirebaseConfigured) return true;
+  setMessage(msgEl, "Firebase is not configured yet. Add your keys in firebase-config.js.");
+  return false;
+}
+
+function initLoginForm() {
+  const form = $("#loginForm");
+  const email = $("#loginEmail");
+  const password = $("#loginPassword");
+  const msg = $("#loginMsg");
+  const submit = $("#loginSubmit");
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    setMessage(msg);
+    const emailVal = email.value.trim();
+    const bad = !EMAIL_RE.test(emailVal);
+    markInvalid(email, bad);
+    markInvalid(password, !password.value);
+    if (bad) return setMessage(msg, "Please enter a valid email address.");
+    if (!password.value) return setMessage(msg, "Please enter your password.");
+    if (!guardConfig(msg)) return;
+
+    setLoading(submit, true);
+    try {
+      await AuthService.login(emailVal, password.value);
+      Modal.close();
+    } catch (err) {
+      setMessage(msg, friendlyError(err));
+    } finally {
+      setLoading(submit, false);
+    }
+  });
+
+  $("#forgotBtn").addEventListener("click", async () => {
+    const emailVal = email.value.trim();
+    if (!EMAIL_RE.test(emailVal)) {
+      markInvalid(email, true);
+      email.focus();
+      return setMessage(msg, "Enter your email above, then click “Forgot password?”.");
+    }
+    if (!guardConfig(msg)) return;
+    try {
+      await AuthService.resetPassword(emailVal);
+      setMessage(msg, "Password reset email sent — check your inbox.", "success");
+    } catch (err) {
+      setMessage(msg, friendlyError(err));
+    }
+  });
+}
+
+function initSignupForm() {
+  const form = $("#signupForm");
+  const name = $("#signupName");
+  const email = $("#signupEmail");
+  const password = $("#signupPassword");
+  const msg = $("#signupMsg");
+  const submit = $("#signupSubmit");
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    setMessage(msg);
+
+    const nameVal = name.value.trim();
+    const emailVal = email.value.trim();
+    const checks = [
+      [name, nameVal.length >= 2, "Please enter your full name."],
+      [email, EMAIL_RE.test(emailVal), "Please enter a valid email address."],
+      [password, password.value.length >= 6, "Password must be at least 6 characters."],
+    ];
+    for (const [input, ok] of checks) markInvalid(input, !ok);
+    const failed = checks.find(([, ok]) => !ok);
+    if (failed) return setMessage(msg, failed[2]);
+    if (!guardConfig(msg)) return;
+
+    setLoading(submit, true);
+    state.signingUp = true;
+    try {
+      const user = await AuthService.signUp({ name: nameVal, email: emailVal, password: password.value });
+      state.signingUp = false;
+      Modal.close();
+      await refreshProfile(auth.currentUser || user);
+      Toast.show(`Account created. Welcome, ${firstName(nameVal)}!`);
+    } catch (err) {
+      state.signingUp = false;
+      setMessage(msg, friendlyError(err));
+    } finally {
+      setLoading(submit, false);
+    }
+  });
+}
+
+function initProfileForm() {
+  const form = $("#profileForm");
+  const input = $("#companyInput");
+  const msg = $("#profileMsg");
+  const submit = $("#profileSave");
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!state.user) return;
+    setMessage(msg);
+    setLoading(submit, true);
+    try {
+      const company = input.value.trim().slice(0, 80);
+      await AuthService.updateCompany(state.user.uid, company);
+      state.profile = { ...(state.profile || {}), company };
+      $("#dashCompany").textContent = company || "Not set";
+      setMessage(msg, "Saved.", "success");
+      Toast.show("Profile updated.");
+    } catch (err) {
+      setMessage(msg, friendlyError(err));
+    } finally {
+      setLoading(submit, false);
+    }
+  });
+}
+
+async function handleLogout() {
+  try {
+    await AuthService.logout();
+    Toast.show("You have been logged out.");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  } catch (err) {
+    Toast.show(friendlyError(err), "error");
+  }
+}
+
+/* ============================================================
+   8. Bootstrap
+   ============================================================ */
+function init() {
+  SiteUI.init();
+  initModalTriggers();
+  initLoginForm();
+  initSignupForm();
+  initProfileForm();
+  View.renderGuest();
+
+  if (!isFirebaseConfigured) {
+    console.warn("[SQySystems] Firebase keys are placeholders. Edit firebase-config.js to enable authentication.");
+    return;
+  }
+
+  // Single source of truth for authentication state.
+  onAuthStateChanged(auth, async (user) => {
+    state.user = user;
+
+    if (!user) {
+      state.profile = null;
+      View.renderGuest();
+      return;
+    }
+
+    // During sign-up the profile document is still being written; signUp handler renders afterwards.
+    if (state.signingUp) return;
+
+    await refreshProfile(user);
+    AuthService.touchLastLogin(user.uid).catch(() => {});
+  });
+}
+
+init();

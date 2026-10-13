@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SQySystems — Custom Websites &amp; Digital Solutions for Business</title>
+  <meta name="description" content="SQySystems is a software development agency building custom websites, business IT solutions and exceptional UI/UX for growing companies." />
+  <meta name="theme-color" content="#2C3E50" />
+  <link rel="icon" href="logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <!-- ============ NAVBAR ============ -->
+  <header class="navbar" id="navbar">
+    <div class="container navbar__inner">
+      <a href="#home" class="brand" aria-label="SQySystems home">
+        <img src="logo.png" alt="SQySystems" class="brand__logo" id="brandLogo" />
+        <span class="brand__text" id="brandText">SQySystems</span>
+      </a>
+
+      <nav class="nav" id="nav" aria-label="Primary">
+        <a href="#services" class="nav__link">Services</a>
+        <a href="#process" class="nav__link">Process</a>
+        <a href="#why-us" class="nav__link">Why Us</a>
+        <a href="#contact" class="nav__link">Contact</a>
+        <a href="#dashboard" class="nav__link is-auth-only" hidden>Dashboard</a>
+
+        <!-- Mobile-only auth buttons (mirrored in the desktop actions) -->
+        <div class="nav__actions-mobile" data-auth-actions>
+          <button class="btn btn--ghost" data-open-modal="loginModal" data-guest-only>Login</button>
+          <button class="btn btn--primary" data-open-modal="signupModal" data-guest-only>Sign Up</button>
+          <button class="btn btn--ghost" data-logout data-user-only hidden>Logout</button>
+        </div>
+      </nav>
+
+      <div class="navbar__actions" data-auth-actions>
+        <span class="navbar__welcome" id="navWelcome" data-user-only hidden></span>
+        <button class="btn btn--ghost" data-open-modal="loginModal" data-guest-only>Login</button>
+        <button class="btn btn--primary" data-open-modal="signupModal" data-guest-only>Sign Up</button>
+        <button class="btn btn--ghost" data-logout data-user-only hidden>Logout</button>
+      </div>
+
+      <button class="burger" id="burger" aria-label="Toggle menu" aria-expanded="false" aria-controls="nav">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- ============ HERO ============ -->
+    <section class="hero" id="home">
+      <div class="hero__bg" aria-hidden="true">
+        <div class="hero__grid"></div>
+        <div class="hero__glow hero__glow--a"></div>
+        <div class="hero__glow hero__glow--b"></div>
+      </div>
+      <div class="container hero__inner">
+        <span class="pill reveal"><span class="pill__dot"></span> Now booking new projects</span>
+        <h1 class="hero__title reveal">
+          Empowering Your Business with <span class="gradient-text">Custom Digital Solutions</span>
+        </h1>
+        <p class="hero__sub reveal">
+          SQySystems designs and engineers fast, secure and beautifully crafted websites and
+          software for ambitious businesses — from first concept to launch and beyond.
+        </p>
+        <div class="hero__cta reveal">
+          <a href="#contact" class="btn btn--primary btn--lg">
+            Start Your Project
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </a>
+          <a href="#services" class="btn btn--outline btn--lg">Explore Services</a>
+        </div>
+
+        <ul class="hero__stats reveal">
+          <li><strong data-count="50" data-suffix="+">0</strong><span>Projects delivered</span></li>
+          <li><strong data-count="98" data-suffix="%">0</strong><span>Client satisfaction</span></li>
+          <li><strong data-count="24" data-suffix="h">0</strong><span>Response time</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============ SERVICES ============ -->
+    <section class="section section--alt" id="services">
+      <div class="container">
+        <header class="section__head reveal">
+          <span class="eyebrow">Services</span>
+          <h2>Everything your business needs to grow online</h2>
+          <p>Full-cycle digital services, delivered by one focused team with obsessive attention to quality.</p>
+        </header>
+
+        <div class="cards">
+          <article class="card reveal">
+            <div class="card__icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></svg>
+            </div>
+            <h3>Web Development</h3>
+            <p>Custom, lightning-fast websites and web apps built with clean, maintainable code, SEO best practices and rock-solid security.</p>
+            <ul class="card__list">
+              <li>Business &amp; corporate websites</li>
+              <li>E-commerce &amp; web platforms</li>
+              <li>Performance &amp; SEO optimisation</li>
+            </ul>
+            <a href="#contact" class="card__link">Discuss a project <span aria-hidden="true">→</span></a>
+          </article>
+
+          <article class="card reveal">
+            <div class="card__icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+            </div>
+            <h3>Business IT Solutions</h3>
+            <p>Reliable systems that streamline operations: internal tools, cloud integrations, automation and secure data workflows.</p>
+            <ul class="card__list">
+              <li>Custom internal software</li>
+              <li>Cloud &amp; Firebase integrations</li>
+              <li>Process automation</li>
+            </ul>
+            <a href="#contact" class="card__link">Discuss a project <span aria-hidden="true">→</span></a>
+          </article>
+
+          <article class="card reveal">
+            <div class="card__icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+            </div>
+            <h3>UI/UX Design</h3>
+            <p>Intuitive, elegant interfaces rooted in research and your brand — designed to convert visitors into loyal customers.</p>
+            <ul class="card__list">
+              <li>Wireframes &amp; prototypes</li>
+              <li>Design systems &amp; branding</li>
+              <li>Responsive, accessible layouts</li>
+            </ul>
+            <a href="#contact" class="card__link">Discuss a project <span aria-hidden="true">→</span></a>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PROCESS ============ -->
+    <section class="section" id="process">
+      <div class="container">
+        <header class="section__head reveal">
+          <span class="eyebrow">Process</span>
+          <h2>A clear path from idea to launch</h2>
+          <p>Transparent, collaborative and predictable — you always know what happens next.</p>
+        </header>
+
+        <ol class="steps">
+          <li class="step reveal"><span class="step__num">01</span><h3>Discover</h3><p>We learn your goals, audience and constraints to define a sharp scope.</p></li>
+          <li class="step reveal"><span class="step__num">02</span><h3>Design</h3><p>Wireframes and polished visuals you can review and refine early.</p></li>
+          <li class="step reveal"><span class="step__num">03</span><h3>Develop</h3><p>Clean, tested, performant code with regular progress demos.</p></li>
+          <li class="step reveal"><span class="step__num">04</span><h3>Launch &amp; Support</h3><p>Smooth deployment followed by ongoing care and improvements.</p></li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ============ WHY US ============ -->
+    <section class="section section--alt" id="why-us">
+      <div class="container why">
+        <div class="why__copy reveal">
+          <span class="eyebrow">Why SQySystems</span>
+          <h2>Engineering rigor meets design craft</h2>
+          <p>We act as an extension of your team — focused on outcomes, not just deliverables.</p>
+          <ul class="checks">
+            <li>Hand-written, framework-light code that loads fast</li>
+            <li>Security-first architecture and best practices</li>
+            <li>Mobile-first, accessible and SEO-ready by default</li>
+            <li>Direct communication with the people building your product</li>
+          </ul>
+        </div>
+        <div class="why__panel reveal" aria-hidden="true">
+          <div class="code-window">
+            <div class="code-window__bar"><i></i><i></i><i></i></div>
+<pre><code><span class="c-k">const</span> project = {
+  client: <span class="c-s">"Your Business"</span>,
+  stack: [<span class="c-s">"HTML5"</span>, <span class="c-s">"CSS3"</span>, <span class="c-s">"JavaScript"</span>],
+  performance: <span class="c-s">"A+"</span>,
+  status: <span class="c-s">"Ready to launch"</span>
+};
+
+<span class="c-k">await</span> sqySystems.<span class="c-f">deliver</span>(project);</code></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ USER DASHBOARD (shown only when logged in) ============ -->
+    <section class="section dashboard" id="dashboard" hidden>
+      <div class="container">
+        <header class="section__head section__head--left">
+          <span class="eyebrow">Client Area</span>
+          <h2 id="dashWelcome">Welcome</h2>
+          <p>Here is a quick overview of your SQySystems account.</p>
+        </header>
+
+        <div class="dash-grid">
+          <article class="panel">
+            <h3>Your profile</h3>
+            <dl class="profile">
+              <div><dt>Name</dt><dd id="dashName">—</dd></div>
+              <div><dt>Email</dt><dd id="dashEmail">—</dd></div>
+              <div><dt>Company</dt><dd id="dashCompany">—</dd></div>
+              <div><dt>Member since</dt><dd id="dashSince">—</dd></div>
+              <div><dt>Account ID</dt><dd id="dashUid" class="mono">—</dd></div>
+            </dl>
+          </article>
+
+          <article class="panel">
+            <h3>Update company</h3>
+            <p class="muted">Saved securely to your private Firestore profile.</p>
+            <form id="profileForm" class="form" novalidate>
+              <label class="field">
+                <span>Company name</span>
+                <input type="text" id="companyInput" maxlength="80" placeholder="Acme Inc." autocomplete="organization" />
+              </label>
+              <button type="submit" class="btn btn--primary" id="profileSave">Save changes</button>
+              <p class="form__msg" id="profileMsg" role="status" aria-live="polite"></p>
+            </form>
+          </article>
+
+          <article class="panel panel--accent">
+            <h3>Your projects</h3>
+            <p class="muted">No active projects yet.</p>
+            <p>Ready to build something great? Tell us about your idea and we'll get back within 24 hours.</p>
+            <a class="btn btn--light" href="#contact">Request a project</a>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ CONTACT / CTA ============ -->
+    <section class="section cta" id="contact">
+      <div class="container">
+        <div class="cta__box reveal">
+          <h2>Let's build something exceptional</h2>
+          <p>Tell us about your business and goals. We'll reply within one business day with next steps.</p>
+          <div class="cta__actions">
+            <a class="btn btn--light btn--lg" href="mailto:hello@sqysystems.com">hello@sqysystems.com</a>
+            <a class="btn btn--outline-light btn--lg" href="tel:+0000000000">+00 000 000 0000</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="footer">
+    <div class="container footer__inner">
+      <div class="footer__brand">
+        <a href="#home" class="brand"><span class="brand__text">SQySystems</span></a>
+        <p>Custom websites and digital services for businesses that want to stand out.</p>
+      </div>
+      <div class="footer__col">
+        <h4>Quick links</h4>
+        <a href="#services">Services</a>
+        <a href="#process">Process</a>
+        <a href="#why-us">Why Us</a>
+        <a href="#contact">Contact</a>
+      </div>
+      <div class="footer__col">
+        <h4>Contact</h4>
+        <a href="mailto:hello@sqysystems.com">hello@sqysystems.com</a>
+        <a href="tel:+0000000000">+00 000 000 0000</a>
+        <span>Mon–Fri, 09:00–18:00</span>
+      </div>
+    </div>
+    <div class="container footer__bottom">
+      <span>© <span id="year"></span> SQySystems. All rights reserved.</span>
+    </div>
+  </footer>
+
+  <!-- ============ AUTH MODALS ============ -->
+  <div class="modal" id="loginModal" role="dialog" aria-modal="true" aria-labelledby="loginTitle" hidden>
+    <div class="modal__backdrop" data-close-modal></div>
+    <div class="modal__dialog">
+      <button class="modal__close" data-close-modal aria-label="Close">×</button>
+      <h2 id="loginTitle">Welcome back</h2>
+      <p class="muted">Log in to access your client area.</p>
+
+      <form id="loginForm" class="form" novalidate>
+        <label class="field">
+          <span>Email</span>
+          <input type="email" id="loginEmail" autocomplete="email" required placeholder="you@company.com" />
+        </label>
+        <label class="field">
+          <span>Password</span>
+          <input type="password" id="loginPassword" autocomplete="current-password" required placeholder="••••••••" />
+        </label>
+        <button type="button" class="link-btn" id="forgotBtn">Forgot password?</button>
+        <p class="form__msg" id="loginMsg" role="alert" aria-live="polite"></p>
+        <button type="submit" class="btn btn--primary btn--block" id="loginSubmit">Log in</button>
+      </form>
+      <p class="modal__switch">No account? <button class="link-btn" data-switch-modal="signupModal">Sign up</button></p>
+    </div>
+  </div>
+
+  <div class="modal" id="signupModal" role="dialog" aria-modal="true" aria-labelledby="signupTitle" hidden>
+    <div class="modal__backdrop" data-close-modal></div>
+    <div class="modal__dialog">
+      <button class="modal__close" data-close-modal aria-label="Close">×</button>
+      <h2 id="signupTitle">Create your account</h2>
+      <p class="muted">Join SQySystems and manage your projects in one place.</p>
+
+      <form id="signupForm" class="form" novalidate>
+        <label class="field">
+          <span>Full name</span>
+          <input type="text" id="signupName" autocomplete="name" required placeholder="Jane Doe" />
+        </label>
+        <label class="field">
+          <span>Email</span>
+          <input type="email" id="signupEmail" autocomplete="email" required placeholder="you@company.com" />
+        </label>
+        <label class="field">
+          <span>Password</span>
+          <input type="password" id="signupPassword" autocomplete="new-password" required minlength="6" placeholder="At least 6 characters" />
+        </label>
+        <p class="form__msg" id="signupMsg" role="alert" aria-live="polite"></p>
+        <button type="submit" class="btn btn--primary btn--block" id="signupSubmit">Create account</button>
+      </form>
+      <p class="modal__switch">Already registered? <button class="link-btn" data-switch-modal="loginModal">Log in</button></p>
+    </div>
+  </div>
+
+  <!-- Toast notifications -->
+  <div class="toast-region" id="toasts" aria-live="polite"></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
