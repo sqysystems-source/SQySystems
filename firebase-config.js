@@ -17,12 +17,12 @@ import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-aut
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID",
+  apiKey: "AIzaSyDZ1kuldn_Df3Fo8Y2LLicMNQsIGEn3ZEc",
+  authDomain: "sqysystems-faa0e.firebaseapp.com",
+  projectId: "sqysystems-faa0e",
+  storageBucket: "sqysystems-faa0e.firebasestorage.app",
+  messagingSenderId: "845387596551",
+  appId: "1:845387596551:web:e668d40fc7178a8dde3ba2",
 };
 
 export const isFirebaseConfigured = !Object.values(firebaseConfig).some((v) =>
