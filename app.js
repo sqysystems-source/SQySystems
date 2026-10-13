@@ -7,9 +7,11 @@
  *   2. Toast            – lightweight notifications
  *   3. Modal            – accessible dialogs (focus trap, ESC, backdrop)
  *   4. Site UI          – navbar, scroll effects, reveal animations, counters
+ *   4b. HeroParallax    – scroll + pointer parallax for the hero background
  *   5. AuthService      – Firebase Auth + Firestore profile operations
+ *   5b. MessageService  – saves contact-form submissions to the `messages` collection
  *   6. View             – renders guest / signed-in UI state
- *   7. Controllers      – forms (login, signup, profile)
+ *   7. Controllers      – forms (login, signup, profile, contact)
  *   8. Bootstrap        – wires everything and starts onAuthStateChanged
  */
 import { auth, db, isFirebaseConfigured } from "./firebase-config.js";
@@ -23,6 +25,8 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   doc,
+  collection,
+  addDoc,
   getDoc,
   setDoc,
   updateDoc,
@@ -154,6 +158,7 @@ const SiteUI = {
     this.navbar();
     this.reveal();
     this.scrollSpy();
+    HeroParallax.init();
   },
 
   logoFallback() {
@@ -188,7 +193,7 @@ const SiteUI = {
   reveal() {
     const items = $$(".reveal");
     // Stagger siblings inside grids
-    $$(".cards, .steps, .hero__stats").forEach((group) =>
+    $$(".cards, .work-grid, .steps, .hero__stats").forEach((group) =>
       $$(".reveal", group).forEach((el, i) => el.style.setProperty("--d", `${i * 0.08}s`))
     );
     $$(".hero__inner > .reveal").forEach((el, i) => el.style.setProperty("--d", `${i * 0.08}s`));
@@ -259,6 +264,84 @@ const SiteUI = {
 };
 
 /* ============================================================
+   4b. HeroParallax — layered scroll + pointer parallax
+   Each element with [data-parallax="factor"] moves by factor × (scroll / pointer offset).
+   Positive and negative factors move layers in different directions for depth.
+   ============================================================ */
+const HeroParallax = {
+  init() {
+    const hero = $(".hero");
+    if (!hero) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const layers = $$("[data-parallax]", hero).map((el) => ({
+      el,
+      factor: parseFloat(el.dataset.parallax) || 0,
+    }));
+    if (!layers.length) return;
+
+    const canHover = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+    const pointer = { x: 0, y: 0 };   // current (smoothed), range -1..1
+    const target = { x: 0, y: 0 };    // where the pointer actually is
+    let scrollY = 0;
+    let visible = true;
+    let ticking = false;
+
+    const render = () => {
+      // Ease the pointer toward its target for a smooth, floaty feel
+      pointer.x += (target.x - pointer.x) * 0.08;
+      pointer.y += (target.y - pointer.y) * 0.08;
+
+      for (const { el, factor } of layers) {
+        const px = pointer.x * factor * 260;
+        const py = pointer.y * factor * 260 + scrollY * factor * 1.6;
+        el.style.setProperty("--px", `${px.toFixed(2)}px`);
+        el.style.setProperty("--py", `${py.toFixed(2)}px`);
+      }
+
+      const settled = Math.abs(target.x - pointer.x) < 0.001 && Math.abs(target.y - pointer.y) < 0.001;
+      ticking = false;
+      if (!settled && visible) request();
+    };
+
+    const request = () => {
+      if (!ticking) {
+        ticking = true;
+        requestAnimationFrame(render);
+      }
+    };
+
+    window.addEventListener("scroll", () => {
+      scrollY = Math.min(window.scrollY, hero.offsetHeight);
+      if (visible) request();
+    }, { passive: true });
+
+    if (canHover) {
+      hero.addEventListener("pointermove", (e) => {
+        const r = hero.getBoundingClientRect();
+        target.x = ((e.clientX - r.left) / r.width - 0.5) * 2;
+        target.y = ((e.clientY - r.top) / r.height - 0.5) * 2;
+        request();
+      });
+      hero.addEventListener("pointerleave", () => {
+        target.x = 0;
+        target.y = 0;
+        request();
+      });
+    }
+
+    // Pause work while the hero is off-screen
+    if ("IntersectionObserver" in window) {
+      new IntersectionObserver(([entry]) => {
+        visible = entry.isIntersecting;
+        if (visible) request();
+      }).observe(hero);
+    }
+    request();
+  },
+};
+
+/* ============================================================
    5. AuthService — Firebase Auth + Firestore
    ============================================================ */
 const AuthService = {
@@ -307,6 +390,24 @@ const AuthService = {
 };
 
 /* ============================================================
+   5b. MessageService — contact form → Firestore `messages`
+   Visitors don't need to be logged in; Firestore rules allow create-only access.
+   ============================================================ */
+const MessageService = {
+  async send({ name, email, message }) {
+    const payload = {
+      name,
+      email,
+      message,
+      uid: auth.currentUser?.uid ?? null,
+      source: "website-contact-form",
+      createdAt: serverTimestamp(),
+    };
+    return addDoc(collection(db, "messages"), payload);
+  },
+};
+
+/* ============================================================
    6. View — renders guest / authenticated state
    ============================================================ */
 const View = {
@@ -315,6 +416,12 @@ const View = {
     $$("[data-user-only], .is-auth-only").forEach((el) => (el.hidden = true));
     $("#dashboard").hidden = true;
     $("#navWelcome").textContent = "";
+
+    // Remove contact-form values that were auto-filled from the previous user's account
+    $$("#contactForm [data-prefilled]").forEach((input) => {
+      input.value = "";
+      delete input.dataset.prefilled;
+    });
   },
 
   renderUser(user, profile) {
@@ -332,6 +439,12 @@ const View = {
     $("#dashSince").textContent = formatDate(profile?.createdAt || user.metadata?.creationTime);
     $("#dashUid").textContent = user.uid;
     $("#companyInput").value = profile?.company || "";
+
+    // Pre-fill the contact form for signed-in users (never overwrite what they typed)
+    const cName = $("#contactName");
+    const cEmail = $("#contactEmail");
+    if (cName && !cName.value) { cName.value = name; cName.dataset.prefilled = "1"; }
+    if (cEmail && !cEmail.value) { cEmail.value = user.email; cEmail.dataset.prefilled = "1"; }
   },
 };
 
@@ -487,6 +600,84 @@ function initProfileForm() {
   });
 }
 
+function initContactForm() {
+  const form = $("#contactForm");
+  if (!form) return;
+
+  const name = $("#contactName");
+  const email = $("#contactEmail");
+  const message = $("#contactMessage");
+  const honeypot = $("#contactWebsite");
+  const count = $("#contactCount");
+  const msg = $("#contactMsg");
+  const submit = $("#contactSubmit");
+  const COOLDOWN_MS = 20000; // basic client-side spam protection
+  let lastSent = 0;
+
+  // Typing again clears the "prefilled" flag so logging out won't wipe user-edited text
+  [name, email].forEach((i) => i.addEventListener("input", () => delete i.dataset.prefilled));
+  message.addEventListener("input", () => (count.textContent = message.value.length));
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    setMessage(msg);
+
+    // Bots fill the hidden field; pretend success and drop the submission
+    if (honeypot.value) {
+      form.reset();
+      return Toast.show("Thanks! Your message has been sent.");
+    }
+
+    const nameVal = name.value.trim();
+    const emailVal = email.value.trim();
+    const messageVal = message.value.trim();
+
+    const checks = [
+      [name, nameVal.length >= 2, "Please enter your name."],
+      [email, EMAIL_RE.test(emailVal), "Please enter a valid email address."],
+      [message, messageVal.length >= 10, "Your message should be at least 10 characters."],
+    ];
+    checks.forEach(([input, ok]) => markInvalid(input, !ok));
+    const failed = checks.find(([, ok]) => !ok);
+    if (failed) {
+      setMessage(msg, failed[2]);
+      failed[0].focus();
+      return;
+    }
+
+    if (!isFirebaseConfigured) {
+      setMessage(msg, "Firebase is not configured yet. Add your keys in firebase-config.js.");
+      return Toast.show("Message could not be sent: Firebase is not configured.", "error");
+    }
+
+    if (Date.now() - lastSent < COOLDOWN_MS) {
+      setMessage(msg, "Please wait a few seconds before sending another message.");
+      return;
+    }
+
+    setLoading(submit, true);
+    try {
+      await MessageService.send({ name: nameVal, email: emailVal, message: messageVal });
+      lastSent = Date.now();
+      form.reset();
+      count.textContent = "0";
+      checks.forEach(([input]) => markInvalid(input, false));
+      delete name.dataset.prefilled;
+      delete email.dataset.prefilled;
+      setMessage(msg, "Message sent — we'll get back to you within one business day.", "success");
+      Toast.show(`Thanks, ${firstName(nameVal)}! Your message has been sent.`);
+      // Re-apply prefill for signed-in users after reset
+      if (state.user) View.renderUser(state.user, state.profile);
+    } catch (err) {
+      console.warn("[SQySystems] Contact form error:", err.code || err);
+      setMessage(msg, friendlyError(err));
+      Toast.show("Sorry, your message could not be sent. Please try again.", "error");
+    } finally {
+      setLoading(submit, false);
+    }
+  });
+}
+
 async function handleLogout() {
   try {
     await AuthService.logout();
@@ -506,6 +697,7 @@ function init() {
   initLoginForm();
   initSignupForm();
   initProfileForm();
+  initContactForm();
   View.renderGuest();
 
   if (!isFirebaseConfigured) {
