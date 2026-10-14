@@ -22,7 +22,7 @@ import {
   sendPasswordResetEmail,
   updateProfile,
   onAuthStateChanged,
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+} from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
 import {
   doc,
   collection,
@@ -31,7 +31,7 @@ import {
   setDoc,
   updateDoc,
   serverTimestamp,
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
 
 /* ============================================================
    1. Utilities
@@ -436,6 +436,9 @@ const View = {
     $("#dashName").textContent = name;
     $("#dashEmail").textContent = user.email;
     $("#dashCompany").textContent = profile?.company || "Not set";
+    $("#dashStoreName").textContent = profile?.tenantStore?.storeName
+      ? `Manage ${profile.tenantStore.storeName} from your SQySystems workspace.`
+      : "Connect your store to start managing orders, products and settings.";
     $("#dashSince").textContent = formatDate(profile?.createdAt || user.metadata?.creationTime);
     $("#dashUid").textContent = user.uid;
     $("#companyInput").value = profile?.company || "";

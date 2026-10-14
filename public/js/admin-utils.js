@@ -12,16 +12,16 @@
 // ON "SECURING THE SHARED FIREBASE INSTANCES"
 // ---------------------------------------------------------------------------
 // There is nothing to secure here, and nothing here could. `db` is the same
-// client instance firebase-config.js creates; the Firebase web config is
+// tenant instance tenant-bridge.js creates; the Firebase web config is
 // public by design and anyone can build an identical instance from the page
 // source. Every guarantee about who may read or write what lives in
 // firestore.rules. This module's job is narrower: never hand feature code a
 // half-formed identity, and never lose an audit entry to a malformed payload.
 
-import { db } from './firebase-config.js';
+import { db, auth } from './tenant-bridge.js';
 import { collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
 
-export { db };
+export { db, auth };
 
 // ==========================================
 // SHARED AUTH STATE (injected by admin.js)

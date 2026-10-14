@@ -12,9 +12,9 @@
  * NOTE: These web config values are NOT secrets. Security is enforced by
  * Firestore Security Rules and Authentication, not by hiding this file.
  */
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
+import { getAuth } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
+import { getFirestore } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDZ1kuldn_Df3Fo8Y2LLicMNQsIGEn3ZEc",

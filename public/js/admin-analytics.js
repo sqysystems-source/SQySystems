@@ -1,4 +1,3 @@
-
 // public/js/admin-analytics.js
 //
 // Data Analytics tab: ROI dashboard, KPIs, charts, search logs, views per
@@ -55,7 +54,7 @@
 //   orders         (api/create-payment.js)      -> items[], totalAmount, status, createdAt
 //   products       (existing collection)        -> title, for the views-per-product table
 
-import { db } from './firebase-config.js';
+import { db } from './tenant-bridge.js';
 import {
     collection, query, where, orderBy, limit, startAfter, getDocs, Timestamp, documentId
 } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
@@ -1043,5 +1042,3 @@ async function loadAnalytics() {
         setLoading(false);
     }
 }
-
-

@@ -6,7 +6,7 @@
   <title>SQySystems — Custom Websites &amp; Digital Solutions for Business</title>
   <meta name="description" content="SQySystems is a software development agency building custom websites, business IT solutions and exceptional UI/UX for growing companies." />
   <meta name="theme-color" content="#2C3E50" />
-  <link rel="icon" href="logo.png" />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -19,7 +19,6 @@
   <header class="navbar" id="navbar">
     <div class="container navbar__inner">
       <a href="#home" class="brand" aria-label="SQySystems home">
-        <img src="logo.png" alt="SQySystems" class="brand__logo" id="brandLogo" />
         <span class="brand__text" id="brandText">SQySystems</span>
       </a>
 
@@ -30,6 +29,7 @@
         <a href="#why-us" class="nav__link">Why Us</a>
         <a href="#contact" class="nav__link">Contact</a>
         <a href="#dashboard" class="nav__link is-auth-only" hidden>Dashboard</a>
+        <a href="public/admin.html" class="btn btn--primary is-auth-only" hidden>Open Store Admin Panel</a>
 
         <!-- Mobile-only auth buttons (mirrored in the desktop actions) -->
         <div class="nav__actions-mobile" data-auth-actions>
@@ -312,10 +312,10 @@
           </article>
 
           <article class="panel panel--accent">
-            <h3>Your projects</h3>
-            <p class="muted">No active projects yet.</p>
-            <p>Ready to build something great? Tell us about your idea and we'll get back within 24 hours.</p>
-            <a class="btn btn--light" href="#contact">Request a project</a>
+            <h3>Your store workspace</h3>
+            <p id="dashStoreName">Connect your store to start managing orders, products and settings.</p>
+            <p>Your store data stays in its dedicated Firebase project.</p>
+            <a class="btn btn--light" href="public/admin.html">Open Store Admin Panel</a>
           </article>
         </div>
       </div>

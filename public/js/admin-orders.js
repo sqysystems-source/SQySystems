@@ -1,3 +1,4 @@
+import { buildStoreApiUrl } from './tenant-bridge.js';
 // public/js/admin-orders.js
 //
 // Orders lifecycle: fetch, filter, render, scroll sync, tracking-number
@@ -611,7 +612,7 @@ export function initOrdersModule(context) {
                             idToken = await currentUser.getIdToken();
                         }
 
-                        const emailRes = await fetch('/api/send-email', {
+                        const emailRes = await fetch(buildStoreApiUrl('/api/send-email'), {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',

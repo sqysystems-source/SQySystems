@@ -1,11 +1,11 @@
 // Shared read-side snapshot listener. Schema v3 adds optional brand/subcategoryId.
 // The supplied baseline was v2 with a two-hour TTL; it contained no revision /
 // dirty-marker protocol. Keep the existing writer/stock transaction contract.
-import { db } from './firebase-config.js';
+import { db } from './tenant-bridge.js';
 import { doc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js';
-import { removeCache } from './cache.js';
 
 export const CATALOG_SNAPSHOT_VERSION = 3;
+let unsubscribe = null;
 let snapshotPromise = null;
 let products = null;
 let signature;
@@ -14,7 +14,7 @@ export function getCatalogSnapshot() {
         snapshotPromise = new Promise(resolve => {
             // A disconnected SDK may only emit fromCache. Do not hang the page.
             const timeout = setTimeout(() => resolve(null), 10000);
-            onSnapshot(doc(db, 'settings', 'catalog'), { includeMetadataChanges: true }, snap => {
+            unsubscribe = onSnapshot(doc(db, 'settings', 'catalog'), { includeMetadataChanges: true }, snap => {
                 if (snap.metadata.fromCache || snap.metadata.hasPendingWrites) return;
                 clearTimeout(timeout);
                 const data = snap.exists() ? snap.data() : null;
@@ -26,7 +26,6 @@ export function getCatalogSnapshot() {
                 products = next;
                 resolve(products);
                 if (changed) {
-                    ['collection_catalog_live_v4', 'search_catalog_v3'].forEach(key => removeCache(key));
                     window.dispatchEvent(new CustomEvent('catalog:updated'));
                 }
             }, error => {
@@ -40,4 +39,11 @@ export function getCatalogSnapshot() {
 }
 export function isListableProduct(product) {
     return Boolean(product) && (product.type === 'simple' || product.type === 'variable');
+}
+
+export function disposeCatalogSnapshot() {
+    unsubscribe?.();
+    unsubscribe = null;
+    snapshotPromise = products = null;
+    signature = undefined;
 }

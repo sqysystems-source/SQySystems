@@ -1,4 +1,3 @@
-
 // public/js/admin-notifications.js
 //
 // Notification bell: live feed, unread badge, audio chime, and the two
@@ -85,7 +84,7 @@
 // watching. The refactor below makes the client version as cheap as it can
 // honestly be; it cannot make it the right place for the work.
 
-import { db } from './firebase-config.js';
+import { db } from './tenant-bridge.js';
 import {
     collection, query, orderBy, limit, onSnapshot, doc, getDoc, setDoc,
     deleteDoc, updateDoc, serverTimestamp, writeBatch, getDocs, where

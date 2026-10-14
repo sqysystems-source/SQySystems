@@ -1,3 +1,4 @@
+import { buildStoreApiUrl } from './tenant-bridge.js';
 // public/js/admin-products.js
 //
 // Products lifecycle: fetch/render, add + edit modal forms, dynamic image
@@ -1436,7 +1437,7 @@ export function initProductsModule(context) {
             if (imageUrl && getCurrentUser()) {
                 try {
                     const idToken = await getCurrentUser().getIdToken();
-                    await fetch('/api/r2?action=delete-file', {
+                    await fetch(buildStoreApiUrl('/api/r2?action=delete-file'), {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -1477,7 +1478,7 @@ export function initProductsModule(context) {
             if (imageUrl && getCurrentUser()) {
                 try {
                     const idToken = await getCurrentUser().getIdToken();
-                    await fetch('/api/r2?action=delete-file', {
+                    await fetch(buildStoreApiUrl('/api/r2?action=delete-file'), {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -1562,7 +1563,7 @@ export function initProductsModule(context) {
     }
 
     async function deleteUnregisteredProductMedia({ idToken, fileKey, fileId, fileSize }) {
-        const cleanupResponse = await fetch('/api/r2?action=delete-file', {
+        const cleanupResponse = await fetch(buildStoreApiUrl('/api/r2?action=delete-file'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1616,7 +1617,7 @@ export function initProductsModule(context) {
         fileInput.disabled = true;
 
         const idToken = await currentUser.getIdToken();
-        const presignResponse = await fetch('/api/r2?action=product-media-url', {
+        const presignResponse = await fetch(buildStoreApiUrl('/api/r2?action=product-media-url'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1787,7 +1788,7 @@ export function initProductsModule(context) {
         if (addProductImageUrlHidden && addProductImageUrlHidden.value && getCurrentUser()) {
             try {
                 const idToken = await getCurrentUser().getIdToken();
-                await fetch('/api/r2?action=delete-file', {
+                await fetch(buildStoreApiUrl('/api/r2?action=delete-file'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -2631,7 +2632,7 @@ export function initProductsModule(context) {
 
                             const freedResults = await Promise.all(imageUrls.map(async (url) => {
                                 try {
-                                    const res = await fetch('/api/r2?action=delete-file', {
+                                    const res = await fetch(buildStoreApiUrl('/api/r2?action=delete-file'), {
                                         method: 'POST',
                                         headers: {
                                             'Content-Type': 'application/json',
@@ -2854,7 +2855,7 @@ export function initProductsModule(context) {
         if (editProductImageUrlHidden && editProductImageUrlHidden.value && getCurrentUser()) {
             try {
                 const idToken = await getCurrentUser().getIdToken();
-                await fetch('/api/r2?action=delete-file', {
+                await fetch(buildStoreApiUrl('/api/r2?action=delete-file'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

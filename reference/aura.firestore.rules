@@ -1,0 +1,230 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAdmin() {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+    // ------------------------------------------
+    // USERS — Strict Ownership & Safe Defaults
+    // ------------------------------------------
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId)
+                    && (!('role' in request.resource.data) || request.resource.data.role != 'admin')
+                    && (!('cart' in request.resource.data)
+                        || (request.resource.data.cart is list
+                            && request.resource.data.cart.size() <= 100));
+      allow update: if isOwner(userId)
+                    && (!('role' in request.resource.data) || request.resource.data.role == resource.data.role)
+                    && (!('cart' in request.resource.data)
+                        || (request.resource.data.cart is list
+                            && request.resource.data.cart.size() <= 100));
+      allow delete: if isAdmin();
+      // Κανόνες για το Cloud Storage
+      match /cloud_drive_files/{fileId} {
+        allow read, create, delete: if isOwner(userId);
+        allow update: if false;
+      }
+    }
+    // ------------------------------------------
+    // ATTRIBUTES & TERMS
+    // ------------------------------------------
+    match /attributes/{attributeId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /attribute_terms/{termId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    // ------------------------------------------
+    // PRODUCTS
+    // ------------------------------------------
+    match /products/{productId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+    // ------------------------------------------
+    // REVIEWS — Public, PII-minimised
+    // ------------------------------------------
+    // Reviews are world-readable, so a review may carry ONLY the exact shape
+    // product.js writes. userName is a short public display name ("First L."):
+    // at most 40 characters and never anything containing '@' (no email or
+    // email-derived value). The server clock stamps the review.
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if request.auth != null
+                    && request.resource.data.keys().hasOnly(['productId', 'userId', 'userName', 'rating', 'comment', 'timestamp'])
+                    && request.resource.data.keys().hasAll(['productId', 'userId', 'userName', 'rating', 'comment', 'timestamp'])
+                    && request.resource.data.productId is string
+                    && reviewId == (request.resource.data.productId + '_' + request.auth.uid)
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.rating is int
+                    && request.resource.data.rating >= 1
+                    && request.resource.data.rating <= 5
+                    && request.resource.data.comment is string
+                    && request.resource.data.comment.size() <= 1000
+                    && request.resource.data.userName is string
+                    && request.resource.data.userName.size() > 0
+                    && request.resource.data.userName.size() <= 40
+                    && !request.resource.data.userName.matches('.*@.*')
+                    && request.resource.data.timestamp == request.time;
+      allow update, delete: if isAdmin();
+    }
+    // ------------------------------------------
+    // SUPPORT TICKETS
+    // ------------------------------------------
+    // Exact shape written by customer-care.js. The server clock stamps the
+    // ticket (no back-dating), and the "Registered" badge the admin panel
+    // shows can only be earned by the signed-in owner of that uid, using the
+    // email of that same Auth account.
+    match /support_tickets/{ticketId} {
+      allow create: if request.resource.data.keys().hasOnly([
+                        'issueType', 'message', 'timestamp', 'isRegistered', 'userId',
+                        'senderName', 'senderEmail', 'senderPhone', 'senderAddress'])
+                    && request.resource.data.keys().hasAll([
+                        'issueType', 'message', 'timestamp', 'isRegistered',
+                        'senderName', 'senderEmail', 'senderPhone', 'senderAddress'])
+                    && request.resource.data.issueType is string
+                    && request.resource.data.issueType.size() <= 100
+                    && request.resource.data.message is string
+                    && request.resource.data.message.size() > 0
+                    && request.resource.data.message.size() <= 2000
+                    && request.resource.data.senderName is string
+                    && request.resource.data.senderName.size() <= 100
+                    && request.resource.data.senderEmail is string
+                    && request.resource.data.senderEmail.size() <= 200
+                    && request.resource.data.senderPhone is string
+                    && request.resource.data.senderPhone.size() <= 50
+                    && request.resource.data.senderAddress is string
+                    && request.resource.data.senderAddress.size() <= 400
+                    && request.resource.data.timestamp == request.time
+                    && request.resource.data.isRegistered is bool
+                    && (
+                      // Guest ticket: may not claim an account.
+                      (request.resource.data.isRegistered == false
+                        && !('userId' in request.resource.data))
+                      // Registered ticket: only the signed-in owner of that
+                      // uid, with the Auth account's own email.
+                      || (request.resource.data.isRegistered == true
+                        && request.auth != null
+                        && request.resource.data.userId == request.auth.uid
+                        && request.resource.data.senderEmail == request.auth.token.email)
+                    );
+      allow read, update, delete: if isAdmin();
+    }
+    // ------------------------------------------
+    // ORDERS
+    // ------------------------------------------
+    match /orders/{orderId} {
+      allow create: if false;
+      allow read: if (request.auth != null && resource.data.userId == request.auth.uid) || isAdmin();
+      allow update, delete: if isAdmin();
+    }
+    // ------------------------------------------
+    // PAYMENT IDEMPOTENCY LEDGER
+    // ------------------------------------------
+    match /processed_viva_transactions/{transactionId} {
+      allow read, write: if false;
+    }
+    // ------------------------------------------
+    // ABANDONED CARTS
+    // ------------------------------------------
+    match /abandoned_carts/{cartId} {
+      allow read, write: if false;
+    }
+    // ------------------------------------------
+    // SEARCH LOGS & PRODUCT VIEWS (legacy per-event records)
+    // ------------------------------------------
+    // Exact shapes written by the OLD tracking.js, stamped by the server
+    // clock, so nothing can be back-dated into an analytics range or carry
+    // junk fields. The client no longer writes here (see analytics_batches
+    // below) — these rules stay only so admin-analytics.js can keep reading
+    // history recorded before the switch.
+    match /search_logs/{logId} {
+      allow create: if false;
+      allow read, update, delete: if isAdmin();
+    }
+    match /product_views/{viewId} {
+      allow create: if false;
+      allow read, update, delete: if isAdmin();
+    }
+    // ------------------------------------------
+    // ANALYTICS BATCHES (cost optimization — replaces per-event writes above)
+    // ------------------------------------------
+    // tracking.js now buffers product views and searches in the browser and
+    // writes ONE document per visit instead of one per event. Each batch id
+    // is client-generated and fixed for its whole life, so `update`/`delete`
+    // are refused outright: a retried write after a dropped connection either
+    // creates the (still-nonexistent) doc or is rejected as permission-denied
+    // because it already exists — either way the event is never double-billed
+    // or altered after the fact. Only admins can read the batches back.
+    match /analytics_batches/{batchId} {
+      allow create: if request.resource.data.keys().hasOnly(['timestamp', 'views', 'searches'])
+                    && request.resource.data.keys().hasAll(['timestamp', 'views', 'searches'])
+                    && request.resource.data.timestamp == request.time
+                    && request.resource.data.views is list
+                    && request.resource.data.views.size() <= 50
+                    && request.resource.data.searches is list
+                    && request.resource.data.searches.size() <= 50;
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+    // ------------------------------------------
+    // ADMIN NOTIFICATIONS
+    // ------------------------------------------
+    // Admins keep full access (admin-notifications.js creates, reads, marks
+    // read and deletes). Everyone else may ONLY create the exact NEW_TICKET
+    // shape customer-care.js writes after a support ticket is submitted:
+    // fixed type and target tab, unread, bounded strings, server timestamp.
+    match /admin_notifications/{notificationId} {
+      allow read, update, delete: if isAdmin();
+      allow create: if isAdmin() || (
+        request.resource.data.keys().hasOnly(['type', 'title', 'message', 'linkTab', 'read', 'createdAt'])
+        && request.resource.data.keys().hasAll(['type', 'title', 'message', 'linkTab', 'read', 'createdAt'])
+        && request.resource.data.type == 'NEW_TICKET'
+        && request.resource.data.linkTab == 'nav-support'
+        && request.resource.data.read == false
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 100
+        && request.resource.data.message is string
+        && request.resource.data.message.size() > 0
+        && request.resource.data.message.size() <= 300
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.createdAt == request.time
+      );
+    }
+    // ------------------------------------------
+    // ADMIN LOGS — Immutable Audit Trail
+    // ------------------------------------------
+    match /admin_logs/{logId} {
+      allow read, delete: if isAdmin();
+      allow create: if isAdmin()
+                    && request.resource.data.adminUid == request.auth.uid
+                    && request.resource.data.timestamp == request.time;
+      allow update: if false;
+    }
+    // ------------------------------------------
+    // SETTINGS
+    // ------------------------------------------
+    match /settings/{document} {
+      allow read: if true;
+      allow write: if isAdmin() && (
+        document != 'shipping' || (
+          request.resource.data.baseCost is number && request.resource.data.baseCost >= 0
+          && request.resource.data.islandCost is number && request.resource.data.islandCost >= 0
+          && request.resource.data.remoteCost is number && request.resource.data.remoteCost >= 0
+          && request.resource.data.freeThreshold is number && request.resource.data.freeThreshold >= 0
+        )
+      );
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

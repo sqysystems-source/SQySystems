@@ -2,12 +2,12 @@
 //
 // ORCHESTRATOR & SHELL.
 //
-// Owns: navigation, the login form, admin role verification, logout, and
+// Owns: navigation, verified-session feature initialisation, logout, and
 // module initialisation. Owns NO feature logic — orders, products, cloud
 // drive, customers, support and audit logs all live in their own modules.
 //
 // DEPENDENCY INJECTION: feature modules never import auth state. This file
-// resolves onAuthStateChanged, verifies the 'admin' role, pushes the verified
+// delegates Master/tenant authentication and role checks to tenant-bridge, pushes the verified
 // user into admin-utils via setCurrentUser(), then calls each module's
 // init*(context). No feature listener is wired until that point, so a
 // non-admin session can never reach feature code.
@@ -18,9 +18,9 @@
 //            -> admin-cloud-and-logs.js -> admin-utils.js
 //            -> admin-settings.js       -> admin-utils.js
 
-import { app, db } from './firebase-config.js';
-import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
-import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
+import { startTenantBridge, logoutPortal } from './tenant-bridge.js';
+import { disposeCategoryTree } from './category-store.js';
+import { disposeCatalogSnapshot } from './catalog-snapshot.js';
 import { setCurrentUser, getCurrentUser, logAdminAction } from './admin-utils.js';
 import { initOrdersModule, syncScrollWidths } from './admin-orders.js';
 import { initProductsModule } from './admin-products.js';
@@ -34,7 +34,6 @@ import { initAnalyticsModule, disposeAnalyticsModule } from './admin-analytics.j
 import { initNotificationsModule, disposeNotificationsModule } from './admin-notifications.js';
 
 document.addEventListener('DOMContentLoaded', () => {
-    const auth = getAuth(app);
 
     // Initialize EmailJS.
     // SECURITY/CORRECTNESS: never ship the literal placeholder. Initialising
@@ -48,13 +47,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const loginView = document.getElementById('login-view');
     const dashboardView = document.getElementById('dashboard-view');
-    
-    // Login Elements
-    const loginForm = document.getElementById('admin-login-form');
-    const loginEmailInput = document.getElementById('admin-email');
-    const loginPasswordInput = document.getElementById('admin-password');
-    const loginError = document.getElementById('login-error');
-    const loginBtn = document.getElementById('login-submit-btn');
     
     // Navigation & Layout Elements
     const navOrders = document.getElementById('nav-orders');
@@ -162,6 +154,9 @@ document.addEventListener('DOMContentLoaded', () => {
             console.warn('[admin] Could not reset cloud/logs module state:', error);
         }
 
+        disposeCategoryTree();
+        disposeCatalogSnapshot();
+
         // Analytics holds four live Chart.js instances and the revenue
         // figures; notifications holds an OPEN onSnapshot subscription that
         // would otherwise keep streaming admin data into a signed-out page.
@@ -181,144 +176,48 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
     // 1. AUTHENTICATION & SECURITY LOCK
     // ==========================================
-    onAuthStateChanged(auth, async (user) => {
-        if (user) {
-            try {
-                const userDocRef = doc(db, "users", user.uid);
-                const userDocSnap = await getDoc(userDocRef);
-
-                if (userDocSnap.exists() && userDocSnap.data().role === 'admin') {
-                    // Account switch inside one tab: the modules belong to the
-                    // previous uid. Reload rather than hand the new admin a
-                    // dashboard holding someone else's closures and cached rows.
-                    if (modulesInitialised && initialisedUid !== user.uid) {
-                        window.location.reload();
-                        return;
-                    }
-
-                    // Publish identity BEFORE any module init, so logAdminAction
-                    // inside a module never fires with a null user.
-                    setCurrentUser(user);
-                    isAdminSession = true;
-                    showDashboardView();
-
-                    if (!modulesInitialised) {
-                        modulesInitialised = true;
-                        initialisedUid = user.uid;
-                        const context = { currentUser: user, userData: userDocSnap.data() };
-                        initOrdersModule(context);
-                        initProductsModule(context);
-                        initCloudAndLogsModule(context);
-                        initSettingsModule(context);
-                        initAnalyticsModule(context);
-                        initNotificationsModule(context);
-                    }
-
-                    if (loggedLoginForUid !== user.uid) {
-                        loggedLoginForUid = user.uid;
-                        logAdminAction('LOGIN', 'system', 'Επιτυχής σύνδεση διαχειριστή.');
-                    }
-                } else {
-                    isAdminSession = false;
-                    loggedLoginForUid = null;
-                    setCurrentUser(null);
-                    purgeSensitiveDashboardState();
-                    showLoginView();
-                    alert("Άρνηση Πρόσβασης: Μη εξουσιοδοτημένος λογαριασμός.");
-                    await signOut(auth);
-                }
-            } catch (error) {
-                isAdminSession = false;
-                loggedLoginForUid = null;
-                setCurrentUser(null);
-                purgeSensitiveDashboardState();
-                console.error("Error verifying admin role:", error);
-                showLoginView();
-                alert("Άρνηση Πρόσβασης: Αδυναμία επαλήθευσης.");
-                await signOut(auth);
-            }
-        } else {
-            isAdminSession = false;
-            loggedLoginForUid = null;
-            setCurrentUser(null);
-            purgeSensitiveDashboardState();
-            showLoginView();
-
-            // Feature modules bind their listeners and closures once, at init.
-            // After a sign-out they have been disposed and cannot be re-inited
-            // without double-attaching, so signing back in inside the same tab
-            // would land on a half-dead dashboard. A reload is the only honest
-            // clean slate — and it guarantees no previous-session state
-            // survives, whatever the purge above may have missed.
-            //
-            // No loop risk: after the reload there is no user and
-            // modulesInitialised is false, so this branch does nothing.
+    startTenantBridge({
+        onReady(context) {
+            const user = context.currentUser;
             if (modulesInitialised) {
-                window.location.reload();
+                if (initialisedUid !== user.uid) window.location.reload();
+                return;
             }
-        }
-    });
-
-    function showDashboardView() {
-        loginView.classList.add('hidden');
-        dashboardView.classList.remove('hidden');
-        dashboardView.classList.add('flex');
-    }
-
-    function showLoginView() {
-        dashboardView.classList.add('hidden');
-        dashboardView.classList.remove('flex');
-        loginView.classList.remove('hidden');
-
-        // A rejected non-admin sign-in leaves the submit button disabled and
-        // reading "Γίνεται σύνδεση...", locking the real admin out of the form
-        // until a manual reload. Restore it every time the form comes back.
-        if (loginBtn) {
-            loginBtn.disabled = false;
-            loginBtn.textContent = 'Σύνδεση';
-        }
-        if (loginForm) loginForm.reset();
-    }
-
-    loginForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        loginError.classList.add('hidden');
-        
-        const originalText = loginBtn.textContent;
-        loginBtn.textContent = 'Γίνεται σύνδεση...';
-        loginBtn.disabled = true;
-
-        try {
-            await signInWithEmailAndPassword(auth, loginEmailInput.value.trim(), loginPasswordInput.value);
-            loginForm.reset();
-        } catch (error) {
-            console.error("Login error:", error);
-            loginError.textContent = "Λανθασμένα στοιχεία διαχειριστή. Δοκιμάστε ξανά.";
-            loginError.classList.remove('hidden');
-            loginBtn.textContent = originalText;
-            loginBtn.disabled = false;
+            setCurrentUser(user);
+            isAdminSession = true;
+            modulesInitialised = true;
+            initialisedUid = user.uid;
+            loginView.classList.add('hidden');
+            document.getElementById('tenant-setup-view').classList.add('hidden');
+            dashboardView.classList.remove('hidden');
+            dashboardView.classList.add('flex');
+            initOrdersModule(context);
+            initProductsModule(context);
+            initCloudAndLogsModule(context);
+            initSettingsModule(context);
+            initAnalyticsModule(context);
+            initNotificationsModule(context);
+            if (loggedLoginForUid !== user.uid) {
+                loggedLoginForUid = user.uid;
+                void logAdminAction('LOGIN', 'system', 'Επιτυχής σύνδεση στο SQySystems Merchant Portal.');
+            }
+        },
+        onLocked() {
+            isAdminSession = false;
+            setCurrentUser(null);
+            if (modulesInitialised) purgeSensitiveDashboardState();
+            dashboardView.classList.add('hidden');
+            dashboardView.classList.remove('flex');
         }
     });
 
     const performLogout = async () => {
-        if (getCurrentUser()) {
-            // Best-effort: a failed audit write must never strand the operator
-            // in a signed-in session.
-            try {
-                await logAdminAction('LOGOUT', 'system', 'Αποσύνδεση διαχειριστή.');
-            } catch (error) {
-                console.warn('[admin] Could not write the logout audit entry:', error);
-            }
-        }
-        isAdminSession = false;
-        setCurrentUser(null);
-        purgeSensitiveDashboardState();
-        await signOut(auth);
+        // Lock immediately; logging is best effort and must not delay logout.
+        if (getCurrentUser()) void logAdminAction('LOGOUT', 'system', 'Αποσύνδεση διαχειριστή.');
+        await logoutPortal();
     };
-
-    if (logoutBtn) logoutBtn.addEventListener('click', performLogout);
-    if (mobileLogoutBtn) mobileLogoutBtn.addEventListener('click', performLogout);
-
+    logoutBtn?.addEventListener('click', performLogout);
+    mobileLogoutBtn?.addEventListener('click', performLogout);
 
     // ==========================================
     // 2. DASHBOARD NAVIGATION

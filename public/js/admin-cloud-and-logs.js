@@ -1,3 +1,4 @@
+import { buildStoreApiUrl } from './tenant-bridge.js';
 // public/js/admin-cloud-and-logs.js
 //
 // Three cohesive concerns that share the storage-quota surface:
@@ -416,7 +417,7 @@ export function initCloudAndLogsModule(context) {
     async function calculateCurrentStorageUsage() {
         if (!getCurrentUser()) return 0;
         try {
-            const res = await fetch('/api/r2?action=storage-usage', {
+            const res = await fetch(buildStoreApiUrl('/api/r2?action=storage-usage'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -618,7 +619,7 @@ export function initCloudAndLogsModule(context) {
             setUploadProgress(0, 'Δημιουργία ασφαλούς συνδέσμου...');
             const idToken = await getCurrentUser().getIdToken();
 
-            const presignResponse = await fetch('/api/r2?action=upload-url', {
+            const presignResponse = await fetch(buildStoreApiUrl('/api/r2?action=upload-url'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -769,7 +770,7 @@ export function initCloudAndLogsModule(context) {
                 try {
                     const idToken = await getCurrentUser().getIdToken();
 
-                    const response = await fetch('/api/r2?action=download-url', {
+                    const response = await fetch(buildStoreApiUrl('/api/r2?action=download-url'), {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -819,7 +820,7 @@ export function initCloudAndLogsModule(context) {
 
             try {
                 const idToken = await getCurrentUser().getIdToken();
-                const response = await fetch('/api/r2?action=delete-file', {
+                const response = await fetch(buildStoreApiUrl('/api/r2?action=delete-file'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
