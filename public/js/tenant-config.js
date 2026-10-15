@@ -3,12 +3,12 @@
 
 // ===== AURA: paste the SIX web config values here ONCE =====
 export const AURA_FIREBASE_CONFIG = Object.freeze({
-  "apiKey": "AIzaSyAA1jFUzkoroxr6Dg4opV_pxqbBKW2xnnY",
-  "authDomain": "test-db-f6315.firebaseapp.com",
-  "projectId": "test-db-f6315",
-  "storageBucket": "test-db-f6315.firebasestorage.app",
-  "messagingSenderId": "166750781296",
-  "appId": "1:166750781296:web:47a26779b4ba9441ca59b5"
+  apiKey: 'AIzaSyAA1jFUzkoroxr6Dg4opV_pxqbBKW2xnnY',
+  authDomain: 'test-db-f6315.firebaseapp.com',
+  projectId: 'test-db-f6315',
+  storageBucket: 'test-db-f6315.firebasestorage.app',
+  messagingSenderId: '166750781296',
+  appId: '1:166750781296:web:47a26779b4ba9441ca59b5',
 });
 // =========================================================
 
