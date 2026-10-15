@@ -4,43 +4,23 @@ service cloud.firestore {
     function isOwner(uid) {
       return request.auth != null && request.auth.uid == uid;
     }
-    function validWebConfig(c) {
-      return c is map
-        && c.keys().hasOnly(['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'])
-        && c.keys().hasAll(['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'])
-        && c.apiKey is string && c.apiKey.size() > 0 && c.apiKey.size() <= 300
-        && c.authDomain is string && c.authDomain.size() > 0 && c.authDomain.size() <= 300
-        && c.authDomain.matches('^[A-Za-z0-9.-]+[.][A-Za-z]{2,}$')
-        && c.projectId is string && c.projectId.matches('^[a-z][a-z0-9-]{4,28}[a-z0-9]$')
-        && c.projectId != 'sqysystems-faa0e'
-        && c.storageBucket is string && c.storageBucket.size() > 0 && c.storageBucket.size() <= 300
-        && c.messagingSenderId is string && c.messagingSenderId.size() <= 300 && c.messagingSenderId.matches('^[0-9]+$')
-        && c.appId is string && c.appId.size() <= 300 && c.appId.matches('^1:[0-9]+:web:[A-Za-z0-9]+$');
-    }
-    function validTenantStore(data) {
-      return !('tenantStore' in data) || (
-        data.tenantStore is map
-        && data.tenantStore.keys().hasOnly(['storeName', 'storeApiBaseUrl', 'firebaseConfig'])
-        && data.tenantStore.keys().hasAll(['storeName', 'storeApiBaseUrl', 'firebaseConfig'])
-        && data.tenantStore.storeName is string
-        && data.tenantStore.storeName.size() > 0 && data.tenantStore.storeName.size() <= 80
-        && data.tenantStore.storeApiBaseUrl is string
-        && data.tenantStore.storeApiBaseUrl.size() <= 500
-        && data.tenantStore.storeApiBaseUrl.matches('^https://[A-Za-z0-9-]+([.][A-Za-z0-9-]+)+$')
-        && validWebConfig(data.tenantStore.firebaseConfig)
-      );
-    }
     match /users/{userId} {
       allow read: if isOwner(userId);
+      // General agency client profiles remain available. Store routing is
+      // agency-controlled and is no longer editable through client profiles.
       allow create: if isOwner(userId)
         && request.resource.data.uid == request.auth.uid
         && (!('role' in request.resource.data) || request.resource.data.role == 'client')
-        && validTenantStore(request.resource.data);
+        && !request.resource.data.keys().hasAny(['tenantStore', 'storeSlug']);
       allow update: if isOwner(userId)
         && request.resource.data.uid == resource.data.uid
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role'])
-        && validTenantStore(request.resource.data);
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'tenantStore', 'storeSlug']);
       allow delete: if false;
+    }
+    // Reserved for trusted agency Admin SDK/Console operations. This version
+    // routes from the code-owned directory; no public email lookup is needed.
+    match /store_directory/{storeId} {
+      allow read, write: if false;
     }
     match /messages/{messageId} {
       allow create: if request.resource.data.keys().hasOnly(['name', 'email', 'message', 'uid', 'createdAt', 'source'])

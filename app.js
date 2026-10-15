@@ -15,6 +15,8 @@
  *   8. Bootstrap        – wires everything and starts onAuthStateChanged
  */
 import { auth, db, isFirebaseConfigured } from "./firebase-config.js";
+import { hasManagedMerchant } from "./public/js/tenant-config.js";
+import { loginMerchant, resetMerchantPassword, logoutMerchant, merchantErrorMessage } from "./public/js/merchant-session.js";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -63,7 +65,7 @@ const AUTH_ERRORS = {
   "permission-denied": "Permission denied. Check your Firestore security rules.",
 };
 const friendlyError = (err) =>
-  AUTH_ERRORS[err?.code] || "Something went wrong. Please try again.";
+  err?.code?.startsWith("portal/") ? merchantErrorMessage(err) : AUTH_ERRORS[err?.code] || "Something went wrong. Please try again.";
 
 function setLoading(button, loading) {
   button.classList.toggle("is-loading", loading);
@@ -436,9 +438,7 @@ const View = {
     $("#dashName").textContent = name;
     $("#dashEmail").textContent = user.email;
     $("#dashCompany").textContent = profile?.company || "Not set";
-    $("#dashStoreName").textContent = profile?.tenantStore?.storeName
-      ? `Manage ${profile.tenantStore.storeName} from your SQySystems workspace.`
-      : "Connect your store to start managing orders, products and settings.";
+    $("#dashStoreName").textContent = "Your store workspace is managed by SQySystems. Open the admin panel to sign in.";
     $("#dashSince").textContent = formatDate(profile?.createdAt || user.metadata?.creationTime);
     $("#dashUid").textContent = user.uid;
     $("#companyInput").value = profile?.company || "";
@@ -496,9 +496,12 @@ function initLoginForm() {
   const password = $("#loginPassword");
   const msg = $("#loginMsg");
   const submit = $("#loginSubmit");
+  const forgot = $("#forgotBtn");
+  let busy = false;
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (busy) return;
     setMessage(msg);
     const emailVal = email.value.trim();
     const bad = !EMAIL_RE.test(emailVal);
@@ -506,32 +509,57 @@ function initLoginForm() {
     markInvalid(password, !password.value);
     if (bad) return setMessage(msg, "Please enter a valid email address.");
     if (!password.value) return setMessage(msg, "Please enter your password.");
-    if (!guardConfig(msg)) return;
-
+    const merchant = hasManagedMerchant(emailVal);
+    if (!merchant && !guardConfig(msg)) return;
+    const enteredPassword = password.value;
+    password.value = "";
+    busy = true;
+    forgot.disabled = true;
     setLoading(submit, true);
     try {
-      await AuthService.login(emailVal, password.value);
-      Modal.close();
+      if (merchant) {
+        await loginMerchant(emailVal, enteredPassword);
+        Modal.close();
+        // Same origin + same named app + session persistence: no credentials
+        // cross a URL, storage handoff, postMessage or second login form.
+        window.location.assign(new URL("./public/admin.html", import.meta.url).href);
+      } else {
+        // Preserve the agency's existing general client accounts.
+        await AuthService.login(emailVal, enteredPassword);
+        Modal.close();
+      }
     } catch (err) {
-      setMessage(msg, friendlyError(err));
+      setMessage(msg, merchant ? merchantErrorMessage(err) : friendlyError(err));
     } finally {
+      busy = false;
+      forgot.disabled = false;
       setLoading(submit, false);
     }
   });
 
-  $("#forgotBtn").addEventListener("click", async () => {
+  forgot.addEventListener("click", async () => {
+    if (busy) return;
     const emailVal = email.value.trim();
     if (!EMAIL_RE.test(emailVal)) {
       markInvalid(email, true);
       email.focus();
       return setMessage(msg, "Enter your email above, then click “Forgot password?”.");
     }
-    if (!guardConfig(msg)) return;
+    const merchant = hasManagedMerchant(emailVal);
+    if (!merchant && !guardConfig(msg)) return;
+    busy = true;
+    forgot.disabled = true;
+    setLoading(submit, true);
     try {
-      await AuthService.resetPassword(emailVal);
-      setMessage(msg, "Password reset email sent — check your inbox.", "success");
+      if (merchant) await resetMerchantPassword(emailVal);
+      else await AuthService.resetPassword(emailVal);
+      setMessage(msg, "If this account exists, a password reset email will arrive shortly.", "success");
     } catch (err) {
-      setMessage(msg, friendlyError(err));
+      setMessage(msg, merchant ? merchantErrorMessage(err) : friendlyError(err));
+    } finally {
+      busy = false;
+      forgot.disabled = false;
+      setLoading(submit, false);
     }
   });
 }
@@ -558,6 +586,7 @@ function initSignupForm() {
     for (const [input, ok] of checks) markInvalid(input, !ok);
     const failed = checks.find(([, ok]) => !ok);
     if (failed) return setMessage(msg, failed[2]);
+    if (hasManagedMerchant(emailVal)) return setMessage(msg, "Your store account is managed by SQySystems. Please log in with your existing store credentials.");
     if (!guardConfig(msg)) return;
 
     setLoading(submit, true);
@@ -683,7 +712,7 @@ function initContactForm() {
 
 async function handleLogout() {
   try {
-    await AuthService.logout();
+    await Promise.all([AuthService.logout(), logoutMerchant()]);
     Toast.show("You have been logged out.");
     window.scrollTo({ top: 0, behavior: "smooth" });
   } catch (err) {

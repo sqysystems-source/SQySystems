@@ -1,38 +1,71 @@
-// Pure configuration validation: only public Firebase web config belongs here.
-const CONFIG_KEYS = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
-const fail = message => { throw new Error(message); };
-const isObject = value => value && typeof value === 'object' && !Array.isArray(value);
+// AGENCY-OWNED DIRECTORY. Edit this file and deploy the agency portal.
+// Only public Firebase WEB config belongs here; never service-account/R2/Resend secrets.
 
+// ===== AURA: paste the SIX web config values here ONCE =====
+export const AURA_FIREBASE_CONFIG = Object.freeze({
+    apiKey: 'PASTE_AURA_API_KEY',
+    authDomain: 'test-db-f6315.firebaseapp.com',
+    projectId: 'test-db-f6315',
+    storageBucket: 'PASTE_AURA_STORAGE_BUCKET',
+    messagingSenderId: 'PASTE_AURA_MESSAGING_SENDER_ID',
+    appId: 'PASTE_AURA_APP_ID',
+});
+// =========================================================
+
+export const STORE_DIRECTORY = Object.freeze({
+    aura: Object.freeze({
+        merchantEmails: Object.freeze(['kostas6603@gmail.com']),
+        storeName: 'AURA',
+        storeApiBaseUrl: 'https://www.sqysystemsdev.org',
+        firebaseConfig: AURA_FIREBASE_CONFIG,
+    }),
+    // Add stores using the same shape and a unique slug. Each merchant email
+    // must appear in exactly one entry. Every tenant still requires role: admin.
+});
+
+export function portalError(code, message) {
+    return Object.assign(new Error(message), { code });
+}
+const invalidConfig = () => portalError('portal/store-not-configured', 'Το κατάστημά σας δεν είναι ακόμη διαθέσιμο. Επικοινωνήστε με τη SQySystems.');
+const CONFIG_KEYS = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
+const isObject = value => value && typeof value === 'object' && !Array.isArray(value);
+export function normalizeMerchantEmail(value) {
+    return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+function matchingStores(email) {
+    const key = normalizeMerchantEmail(email);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(key) || key.length > 254) return [];
+    return Object.entries(STORE_DIRECTORY).filter(([, store]) =>
+        store.merchantEmails.some(merchant => normalizeMerchantEmail(merchant) === key));
+}
+export function hasManagedMerchant(email) {
+    return matchingStores(email).length > 0;
+}
 export function validateTenantStore(value, masterProjectId = 'sqysystems-faa0e') {
-    if (!isObject(value)) fail('Συμπληρώστε τα στοιχεία σύνδεσης καταστήματος.');
-    if (Object.keys(value).some(key => !['storeName', 'storeApiBaseUrl', 'firebaseConfig'].includes(key))) {
-        fail('Μη υποστηριζόμενο πεδίο σύνδεσης.');
-    }
+    if (!isObject(value) || Object.keys(value).some(key => !['storeName', 'storeApiBaseUrl', 'firebaseConfig'].includes(key))) throw invalidConfig();
     const storeName = typeof value.storeName === 'string' ? value.storeName.trim() : '';
-    if (!storeName || storeName.length > 80 || /[\u0000-\u001f\u007f]/.test(storeName)) fail('Το όνομα πρέπει να έχει 1–80 χαρακτήρες.');
+    if (!storeName || storeName.length > 80 || /[\u0000-\u001f\u007f]/.test(storeName)) throw invalidConfig();
     const rawUrl = typeof value.storeApiBaseUrl === 'string' ? value.storeApiBaseUrl.trim() : '';
     let url;
-    try { url = new URL(rawUrl); } catch { fail('Δώστε έγκυρο HTTPS domain για το API.'); }
-    if (rawUrl.length > 500 || url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.pathname !== '/' || !url.hostname.includes('.') || url.port) {
-        fail('Το API πρέπει να είναι HTTPS origin, π.χ. https://shop.vercel.app, χωρίς διαδρομή, θύρα ή κωδικούς.');
-    }
+    try { url = new URL(rawUrl); } catch { throw invalidConfig(); }
+    if (rawUrl.length > 500 || url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.pathname !== '/' || !url.hostname.includes('.') || url.port) throw invalidConfig();
     const config = value.firebaseConfig;
-    if (!isObject(config) || Object.keys(config).length !== CONFIG_KEYS.length || CONFIG_KEYS.some(key => typeof config[key] !== 'string' || !config[key].trim() || config[key].length > 300)) {
-        fail('Επικολλήστε μόνο τα έξι πεδία του δημόσιου Firebase web config (όχι service account).');
-    }
+    if (!isObject(config) || Object.keys(config).length !== CONFIG_KEYS.length || CONFIG_KEYS.some(key => typeof config[key] !== 'string' || !config[key].trim() || config[key].length > 300 || /^(PASTE_|YOUR_|REPLACE_)/i.test(config[key].trim()))) throw invalidConfig();
     const firebaseConfig = Object.fromEntries(CONFIG_KEYS.map(key => [key, config[key].trim()]));
-    if (!/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(firebaseConfig.projectId)) fail('Μη έγκυρο Firebase projectId.');
-    if (firebaseConfig.projectId === masterProjectId) fail('Το κατάστημα χρειάζεται ξεχωριστό Firebase project από το SQySystems.');
-    if (!/^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(firebaseConfig.authDomain)) fail('Το authDomain πρέπει να είναι hostname χωρίς https:// ή διαδρομή.');
-    if (!/^\d+$/.test(firebaseConfig.messagingSenderId)) fail('Μη έγκυρο messagingSenderId.');
-    if (!/^1:\d+:web:[A-Za-z0-9]+$/.test(firebaseConfig.appId)) fail('Μη έγκυρο Firebase web appId.');
-    return { storeName, storeApiBaseUrl: url.origin, firebaseConfig };
+    if (!/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(firebaseConfig.projectId) || firebaseConfig.projectId === masterProjectId) throw invalidConfig();
+    if (!/^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(firebaseConfig.authDomain)) throw invalidConfig();
+    if (!/^\d+$/.test(firebaseConfig.messagingSenderId) || !/^1:\d+:web:[A-Za-z0-9]+$/.test(firebaseConfig.appId)) throw invalidConfig();
+    return Object.freeze({ storeName, storeApiBaseUrl: url.origin, firebaseConfig: Object.freeze(firebaseConfig) });
 }
-
+export function resolveMerchantStore(email) {
+    const matches = matchingStores(email);
+    if (matches.length === 0) throw portalError('portal/unknown-merchant', 'Δεν ήταν δυνατή η σύνδεση. Ελέγξτε τα στοιχεία σας ή επικοινωνήστε με τη SQySystems.');
+    if (matches.length !== 1) throw invalidConfig();
+    const [slug, entry] = matches[0];
+    return Object.freeze({ slug, email: normalizeMerchantEmail(email), tenantStore: validateTenantStore({ storeName: entry.storeName, storeApiBaseUrl: entry.storeApiBaseUrl, firebaseConfig: entry.firebaseConfig }) });
+}
 export function storeApiUrl(tenantStore, path) {
-    if (!tenantStore) fail('Δεν έχει συνδεθεί κατάστημα.');
-    if (typeof path !== 'string' || !/^\/api\/(?:r2|send-email)(?:\?[^#\r\n]*)?$/.test(path) || /[\\\u0000-\u0020]/.test(path)) {
-        fail('Μη επιτρεπτή διαδρομή API.');
-    }
+    if (!tenantStore) throw portalError('portal/no-session', 'Συνδεθείτε ξανά στο κατάστημά σας.');
+    if (typeof path !== 'string' || !/^\/api\/(?:r2|send-email)(?:\?[^#\r\n]*)?$/.test(path) || /[\\\u0000-\u0020]/.test(path)) throw new Error('Unsupported store API path.');
     return tenantStore.storeApiBaseUrl + path;
 }

@@ -7,7 +7,7 @@
 // drive, customers, support and audit logs all live in their own modules.
 //
 // DEPENDENCY INJECTION: feature modules never import auth state. This file
-// delegates Master/tenant authentication and role checks to tenant-bridge, pushes the verified
+// delegates managed tenant authentication and role checks to tenant-bridge, pushes the verified
 // user into admin-utils via setCurrentUser(), then calls each module's
 // init*(context). No feature listener is wired until that point, so a
 // non-admin session can never reach feature code.
@@ -188,7 +188,6 @@ document.addEventListener('DOMContentLoaded', () => {
             modulesInitialised = true;
             initialisedUid = user.uid;
             loginView.classList.add('hidden');
-            document.getElementById('tenant-setup-view').classList.add('hidden');
             dashboardView.classList.remove('hidden');
             dashboardView.classList.add('flex');
             initOrdersModule(context);

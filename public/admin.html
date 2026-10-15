@@ -99,10 +99,10 @@
 <body class="font-sans text-neutral-900 antialiased selection:bg-neutral-200 selection:text-neutral-900">
 
     <div id="login-view" class="min-h-screen flex items-center justify-center px-6 bg-white">
-        <div class="w-full max-w-md bg-white p-10 md:p-14 shadow-sm border border-gray-100 rounded-sm">
+        <div class="portal-login-card w-full max-w-md bg-white p-10 md:p-14 shadow-sm border border-gray-100 rounded-sm">
             <div class="text-center mb-10">
                 <h1 id="portal-login-title" class="font-serif text-3xl text-neutral-900 mb-2">SQySystems Merchant Portal</h1>
-                <p id="portal-login-description" class="font-sans text-sm text-neutral-500" role="status" aria-live="polite">Έλεγχος ασφαλούς σύνδεσης…</p>
+                <p id="portal-login-description" class="font-sans text-sm text-neutral-500" role="status" aria-live="polite">Συνδεθείτε για να διαχειριστείτε το κατάστημά σας.</p>
             </div>
 
             <div role="alert" id="login-error" class="hidden mb-6 p-4 bg-red-50 border border-red-100 text-red-600 text-sm font-sans rounded-sm text-center"></div>
@@ -123,37 +123,11 @@
             </form>
             <div class="portal-links">
                 <button hidden type="button" id="portal-retry">Δοκιμή ξανά</button>
-                <button hidden type="button" id="portal-login-configure" data-configure-store>Ρύθμιση σύνδεσης καταστήματος</button>
-                <button hidden type="button" id="portal-master-logout" data-portal-logout>Αποσύνδεση SQySystems</button>
                 <a href="../index.html">← Επιστροφή στο SQySystems</a>
             </div>
         </div>
     </div>
 
-    <section id="tenant-setup-view" class="hidden portal-setup" aria-labelledby="tenant-setup-title">
-        <div class="portal-card">
-            <span class="portal-badge">SQySystems Merchant Portal</span>
-            <h1 id="tenant-setup-title">Σύνδεση καταστήματος</h1>
-            <p>Συνδέστε το δικό σας e-shop. Τα στοιχεία διαχειριστή θα ζητηθούν ξεχωριστά στο επόμενο βήμα.</p>
-            <div id="tenant-setup-error" class="hidden portal-error" role="alert"></div>
-            <form id="tenant-setup-form">
-                <label for="tenant-store-name">Όνομα καταστήματος</label>
-                <input id="tenant-store-name" required maxlength="80" placeholder="AURA" autocomplete="organization">
-                <label for="tenant-api-base">Domain API καταστήματος</label>
-                <input id="tenant-api-base" type="url" required maxlength="500" placeholder="https://your-eshop.vercel.app" aria-describedby="tenant-api-help">
-                <p id="tenant-api-help" class="portal-help">Το HTTPS domain του Vercel backend του καταστήματος, χωρίς /api. Τα tenant tokens θα αποστέλλονται σε αυτό το domain.</p>
-                <label for="tenant-firebase-config">Firebase web config (JSON)</label>
-                <textarea id="tenant-firebase-config" required rows="10" maxlength="5000" spellcheck="false" aria-describedby="tenant-config-help" placeholder='{"apiKey":"…","authDomain":"…","projectId":"…","storageBucket":"…","messagingSenderId":"…","appId":"…"}'></textarea>
-                <p id="tenant-config-help" class="portal-help">Firebase Console → Project settings → Your apps → Web config. Μόνο τα έξι δημόσια πεδία JSON. Ποτέ service account, private key, Resend ή R2 secret.</p>
-                <button id="tenant-save-setup" class="portal-primary" type="submit">Αποθήκευση και συνέχεια</button>
-            </form>
-            <div class="portal-links">
-                <button type="button" id="tenant-cancel-setup">Ακύρωση</button>
-                <button type="button" data-portal-logout>Αποσύνδεση SQySystems</button>
-                <a href="../index.html">← Επιστροφή στο SQySystems</a>
-            </div>
-        </div>
-    </section>
 
     <div id="dashboard-view" class="hidden min-h-screen bg-neutral-50 flex-col md:flex-row">
         
@@ -164,7 +138,6 @@
                 <p id="portal-identity" class="portal-help portal-identity"></p>
                 <div class="portal-links portal-sidebar-links">
                     <a href="../index.html">← SQySystems</a>
-                    <button type="button" data-configure-store>Ρύθμιση σύνδεσης καταστήματος</button>
                 </div>
                 
                 <nav class="flex flex-row md:flex-col gap-6 font-sans text-sm tracking-widest uppercase overflow-x-auto no-scrollbar whitespace-nowrap pb-2 md:pb-0">
