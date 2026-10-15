@@ -1,162 +1,222 @@
-# Deployment — managed merchant login
+# Deploy SQy Admin and dynamic merchant routing
 
-## 1. Fill AURA config once, as the agency owner
+## 1. Publish Master rules first
 
-Edit the `AURA_FIREBASE_CONFIG` block at the top of
-`public/js/tenant-config.js`. Paste all six actual web values for
-**test-db-f6315** from Firebase Console → Project settings → Your apps.
-`authDomain` and `projectId` are prefilled from the project named in your request;
-verify them against the Console too. Replace every `PASTE_AURA_...` placeholder.
-The precise storage bucket hostname must come from your web config; do not
-assume a bucket suffix from the project ID.
-
-This is the only config editing the agency needs to do for AURA. The merchant
-will never be asked for these values. They are public web config values, not
-service-account JSON or private keys. Never place server secrets in this file.
-
-The code already maps `kostas6603@gmail.com` to AURA and sends its R2/email API
-requests to `https://www.sqysystemsdev.org`.
-
-## 2. Check the AURA tenant account
-
-In Firebase **test-db-f6315**:
-
-1. Enable Authentication → Email/Password.
-2. Create or reuse the email/password account `kostas6603@gmail.com`.
-3. In Firestore, use the Console or a trusted Admin SDK to set
-   `users/{THAT_ACCOUNT_AUTH_UID}.role = "admin"`.
-4. Keep the existing tenant Firestore rules and indexes. They must allow a
-   signed-in user to read their own `users/{uid}` document and allow verified
-   admins the existing panel operations. Never permit self-assignment of admin.
-5. Add `sqysystems.com`, `www.sqysystems.com` and any exact staging hostname you
-   use under Authentication → Settings → Authorized domains.
-
-Use that tenant account's password when testing. It may differ from any old
-agency/Master account password. There is no Master sign-in, account creation or
-UID requirement in the new merchant flow.
-
-## 3. Deploy Master rules to Master only
-
-The root `firestore.rules` belongs to **sqysystems-faa0e**, not the tenant.
-Publish it in the Master Console, or use your installed Firebase CLI:
+Root `firestore.rules` belongs to **sqysystems-faa0e**. Publish it via Master
+Firebase Console → Firestore → Rules, or your Firebase CLI:
 
 ```sh
 firebase deploy --only firestore:rules --project sqysystems-faa0e
 ```
 
-It preserves owner-only agency profiles and create-only public contact messages.
-Client profile create/update can no longer assign/change `tenantStore` or
-`storeSlug`; existing profile `role` remains immutable. Legacy connection fields
-can stay in old profiles, but they are no longer read by routing. Delete legacy
-fields only through trusted agency maintenance if desired.
+Do **not** deploy this file to test-db-f6315 or any client store. The tenant's
+existing product/order/settings rules stay unchanged.
 
-`store_directory` is client-denied. This release uses the static code registry,
-so there is no unauthenticated Firestore directory request and no need to grant
-public access to merchant profile documents. The optional Firestore-backed
-fallback is not enabled. Do not weaken these rules to recreate the old wizard.
+Deploy the rules before testing the new login router: it now needs a public
+single-document get on `merchant_stores/{emailLower}` even when no document exists.
+A denied/unavailable lookup intentionally does not bypass the directory.
 
-**Do not publish these Master rules to test-db-f6315.** The tenant's existing
-product/order/settings rules remain separate and were not changed.
+The rules additionally enforce:
 
-## 4. Keep the tenant backend and bucket CORS in place
+- Master `admin` / `superadmin` role for all users-list, inbox, paid-order and
+  directory-management operations.
+- Owner-only profile writes, immutable UID/role/routing fields and no client
+  deletion of user profiles. Admins can read/list profiles; role assignment
+  remains a trusted Console/Admin SDK action.
+- Contact validation on public create, admin-only status changes and deletion.
+- Validated paid records with positive integer euro cents, immutable creator/
+  creation date and server updated timestamps.
+- Exact public directory fields, six public Firebase config fields, normalized
+  merchant email/document ID, HTTPS origin, active/disabled/deleted status and
+  server updatedAt. No private keys, billing notes or other extra fields.
 
-The tenant backend is still at `https://www.sqysystemsdev.org`, with `/api/r2`
-and `/api/send-email`. Both must accept the agency's exact origin(s), handle
-OPTIONS before requiring Bearer auth, and allow `Authorization, Content-Type`.
-See `ESHOP_CORS_INSTRUCTIONS.md` for the six-line snippet and bucket settings.
+## 2. Bootstrap your agency administrator
 
-Verify the existing handlers use **test-db-f6315's** Admin SDK to verify tenant
-ID tokens and tenant admin role for privileged operations. The new portal sends
-tenant tokens, never Master tokens. Keep existing ownership checks, upload
-validation and email idempotency. These separate backend files were not supplied
-in the latest source and are not patched by this ZIP.
-
-R2 buckets must also allow the agency origin for presigned PUTs. API CORS alone
-is not sufficient for direct uploads. Server secrets stay in the tenant's Vercel
-environment, not in the agency's browser bundle.
-
-## 5. Deploy the complete agency project
-
-Keep the supplied Vercel settings: Framework **Other**, no build command, Output
-Directory **`.`**. Do not set the output directory to `public`, because the root
-agency site and config must be served alongside the `/public/` admin assets.
-The existing `/customer.html` redirect to `/public/admin.html` is retained.
-
-Upload the whole project. In particular, include the new
-`public/js/merchant-session.js` together with the bridge/config changes; do not
-update only the HTML or copy an old tenant bridge over it. `npm install` is not
-required for production: the runtime uses browser ES modules and the existing
-Firebase 10.13.1/CDN imports.
-
-Use the same agency origin for both pages. The redirect from the login modal
-is generated relative to the current page's origin; it does not redirect between
-`www` and non-`www`. If your hosting has a canonical hostname redirect, apply it
-before users log in. Do not pass credentials/tokens through a redirect URL to
-work around a hostname change.
-
-Clients can use either:
+In **Master Authentication**, create/reuse the account you will use for agency
+operations. Copy that Master Auth UID. In **Master Firestore** open/create its
+`users/{uid}` profile and set fields such as:
 
 ```text
-https://sqysystems.com/public/admin.html
-https://sqysystems.com/index.html → Login
+uid: "THE_MASTER_AUTH_UID"
+email: "YOUR_AGENCY_LOGIN_EMAIL"
+displayName: "Agency Owner"
+company: "SQySystems"
+role: "superadmin"
 ```
 
-The navbar's Open Store Admin Panel button is visible before agency login.
-General agency customers who are not in the managed store directory keep the
-old Master login/profile flow; store merchants are routed directly to tenant
-Auth and bypass it.
+An existing `role: "admin"` also works. Never put this role on an arbitrary
+public signup through the browser, never use an e-shop customer UID by mistake,
+and do not weaken the rules to let a user self-promote.
 
-## 6. Add another managed store
+Visit **`https://sqysystems.com/sqy-admin.html`** and use this Master email/password.
+The page itself has a Master login form and does not use merchant routing. The
+SQy Admin navbar/dashboard link appears after a Master role check on the homepage.
 
-Add a unique entry under `STORE_DIRECTORY` in `public/js/tenant-config.js`:
+If `kostas6603@gmail.com` is also your Master owner email, use `/sqy-admin.html`
+for agency login. The homepage modal continues to route that mapped email to
+AURA's tenant. The two Firebase accounts can have different UIDs/passwords.
 
-```js
-secondstore: Object.freeze({
-    merchantEmails: Object.freeze(['owner@example.com']),
-    storeName: 'Second Store',
-    storeApiBaseUrl: 'https://second-store.example.com',
-    firebaseConfig: Object.freeze({
-        apiKey: 'ACTUAL_PUBLIC_WEB_API_KEY',
-        authDomain: 'second-store.firebaseapp.com',
-        projectId: 'second-store',
-        storageBucket: 'ACTUAL_BUCKET_FROM_FIREBASE_CONFIG',
-        messagingSenderId: '1234567890',
-        appId: '1:1234567890:web:abcdef123456'
-    })
-}),
+## 3. Deploy all source files together
+
+Use the existing Vercel project: Framework Other, no build command, output `.`.
+Upload the complete folder, including the new root `sqy-admin.html`,
+`sqy-admin.css`, `sqy-admin.js` and these new modules:
+
+```text
+public/js/agency-model.js
+public/js/merchant-directory.js
+public/js/control-plane-data.js
 ```
 
-Replace the example with real values before deployment. Email matching trims
-whitespace and ignores case. Each email must occur in exactly one store entry;
-ambiguous entries fail closed. To allow another admin for the same tenant, add
-their email to that store's merchantEmails and provision their tenant admin role.
-Email assignment alone never grants admin permissions.
+The updated session/routing and landing files must deploy with them. Do not
+replace these with an old tenant bridge. The Firebase browser SDK stays at
+10.13.1; production remains a static ES-module site with no npm build dependency.
 
-The registry is deployed code. Adding/removing/reassigning a merchant requires
-an agency deployment. To revoke an active merchant immediately, revoke their
-admin role in that tenant; its live profile listener locks the workspace.
+The existing framing/CSP/referrer protections and `/customer.html` alias remain.
+The control-plane assets now also get no-store and noindex headers. The current
+favicon reference is satisfied by an included SVG fallback; no image bytes were
+present in the source export.
 
-## 7. Acceptance checks with real projects
+Keep login and navigation on one canonical agency hostname. Session restoration
+from the landing modal to the merchant page is same-origin and same-tab. Add the
+agency's production/staging hostnames to Master and tenant Auth authorized domains
+as appropriate; do not forward a password or token in a redirect URL.
 
-- With a fresh tab, open `/public/admin.html`. Only Email and Password are shown.
-- Sign in as `kostas6603@gmail.com` with the tenant password. AURA opens without
-  a Master login or any configuration prompt. Wrong password allows retry.
-- In another fresh tab, use the landing-page Login modal with the same tenant
-  credentials. It opens AURA immediately and does not ask for a second password.
-- Inspect network requests: Auth uses test-db-f6315; Firestore feature requests
-  go to the tenant; R2/email go to www.sqysystemsdev.org with a tenant Bearer token.
-- Refresh `/public/admin.html`: the role is checked again and the panel resumes.
-- A tenant customer account and an unassigned email cannot open admin features.
-- Update a test product, optional brand/subcategory/discount and shipping setting.
-  Verify order tabs, analytics, notifications, catalog publish and audit logs.
-- Test one media upload/delete, one drive upload/download/delete and a shipment
-  email to a test recipient. Confirm correct CORS and backend authorization.
-- Remove admin role while the portal is open: it locks and clears its session.
-- Log out on desktop and mobile: tenant Auth, displayed data and locator clear.
-- Test a normal agency client signup/login/profile edit and a guest contact
-  message to confirm the preserved Master website features.
-- Keep old store-hosted admin screens removed or redirected to the agency portal
-  in the actual e-shop deployment. Moving this UI does not itself remove them.
+## 4. Move AURA into Master with one form save
 
-`npm test` runs the included isolated checks. Firebase emulator, deployed browser
-behavior and live R2/Resend testing must be done after adding your real AURA keys.
+The latest supplied `AURA_FIREBASE_CONFIG` is preserved in
+`public/js/tenant-config.js` as the fallback/seed for `kostas6603@gmail.com`.
+
+Inside SQy Admin → Store connections:
+
+1. Click **Use AURA seed**. This only pre-fills the drawer; it does not write yet.
+2. Verify the domain `https://www.sqysystemsdev.org`, project `test-db-f6315`, all
+   six web values and merchant email. Select plan/status.
+3. Click **Save connection**.
+
+This writes the following shape to `merchant_stores/kostas6603@gmail.com`:
+
+```text
+merchantEmail: "kostas6603@gmail.com"
+storeName: "AURA"
+storeApiBaseUrl: "https://www.sqysystemsdev.org"
+plan: "Custom E-Shop"
+status: "active"
+firebaseConfig: { apiKey, authDomain, projectId, storageBucket,
+                  messagingSenderId, appId }
+updatedAt: server timestamp
+```
+
+These values now override the fallback. Edit future keys/domain/plan/status
+inside SQy Admin; no frontend deployment is needed for a new dynamic connection.
+
+The public record intentionally contains no other private fields. A public caller
+can get a document for a known email, as needed by pre-login routing, but cannot
+query/list the collection. Do not add service-account credentials, private keys,
+Resend/R2 secrets, invoices or internal billing notes to these records.
+
+## 5. Add a client and record a payment
+
+The client directory reads Master Firestore `users`. It does not enumerate
+Firebase Auth users who have no profile document. Existing signups create their
+own profiles; alternatively, use trusted agency provisioning.
+
+For a paid request, choose **Add paid client / order** and enter email, name,
+package details, euros paid and payment date. This saves a private admin-only
+`client_payments` record with `source: "manual"`, `status: "paid"`, `currency:
+"EUR"`, `amountCents`, paidAt, createdBy and server timestamps.
+
+No money is charged, no receipt is issued and no demo paid records are inserted.
+Each row's Setup Tenant & API Keys opens the provisioning drawer for its email.
+The provisioning badge is derived from an active Master directory record, so
+editing/disabling the connection immediately changes Pending Setup / Store
+Connected without storing a stale payment-status copy.
+
+## 6. Connect another tenant
+
+From a registered client row, paid-client card or **Connect e-shop**:
+
+- Select/type the merchant email. It is lowercased and used as the document ID.
+- Enter store name, plan, HTTPS API origin and status.
+- Enter the six public web fields or paste the Firebase Console config object.
+  JSON and a literal JS declaration with quoted strings/comments/trailing commas
+  are supported. Optional measurementId/databaseURL are ignored when importing.
+  Expressions/scripts/service accounts are rejected; no pasted code executes.
+- Save. Existing edits check the last loaded record version to reject conflicting
+  concurrent changes. Reopen the form if someone changed it while it was open.
+
+The target Firebase project, email/password Auth account, tenant Firestore
+`users/{tenantUid}.role = "admin"` and tenant backend must already exist. This
+panel stores the connection; it does not create those external resources.
+A merchant does not need a matching Master account or Master password.
+
+Store API URLs are plain HTTPS origins, not Markdown links or `/api` paths.
+Existing R2/email handlers must verify THIS tenant's ID tokens and admin role,
+with the CORS configuration in ESHOP_CORS_INSTRUCTIONS.md. R2 buckets must allow
+the agency origin separately for direct presigned uploads.
+
+## 7. Disable, delete and restore
+
+Disable blocks portal login/restore and locks an open merchant workspace through
+its directory listener. Enable makes the existing mapping available again.
+
+Delete removes the connection from the default list by setting status `deleted`.
+It deliberately retains a tombstone to block the AURA seed. Use the Deleted filter
+and Restore / Edit to reactivate it. Hard-deleting AURA's document from the Console
+would make the static fallback applicable again. Other tenant/customer/product
+or payment data is not deleted by removing a connection.
+
+Directory changes do not revoke the tenant's underlying Firebase Auth identity or
+its direct API permissions. If you need to remove all tenant admin access, also
+revoke its tenant Firestore role / credentials using the tenant's trusted tools.
+
+## 8. Tests and real-project acceptance
+
+The included 35 isolated tests require Node 20+ (Node 24 was used) and no packages:
+
+```sh
+npm test
+```
+
+For actual Firestore Security Rules emulator checks, use a local development
+machine with Java and Firebase CLI support. Install local **test-only** dependencies
+(the production page still loads SDK 10.13.1 from its existing CDN):
+
+```sh
+npm install --no-save firebase @firebase/rules-unit-testing firebase-tools
+npm run test:rules
+```
+
+The emulator command uses only `demo-sqysystems` and port 8085. Its script refuses
+to run against a non-local emulator. It exercises anonymous get/no-list routing,
+owner vs admin access, self-promotion denial, private inbox/payment reads,
+validated admin writes, and public-field/secret-smuggling rejection. This suite
+was included but not executed here because its dependencies were unavailable.
+
+Complete these checks on staging before production use:
+
+- Guests see Login/Sign Up, not navbar Store Admin or SQy Admin. A normal Master
+  client sees Store Admin but not SQy Admin. A Master admin sees both, and role
+  removal hides SQy Admin again.
+- Contact Name/Email/Message labels and the nested 0/2000 counter are readable.
+- Anonymous/ordinary users cannot open SQy Admin data or directly read/list its
+  users, messages, payments or merchant directory; a public single directory
+  get still works.
+- Both `admin` and `superadmin` roles load all four live datasets and accurate
+  KPIs; legacy status-less messages count as unread.
+- Create a test contact submission; mark Read/Resolved, open its mailto draft and
+  delete the test ticket. No automated outbound message should be sent.
+- Log a test payment; verify the cents/date/name/package, open its setup drawer,
+  provision a tenant and see Store Connected. Test two concurrent edit forms.
+- Sign a merchant in from both entry points; confirm one password entry, tenant
+  Auth/role verification and tenant API tokens. Add an email absent from the
+  static seed and verify its dynamic connection works.
+- Disable/delete AURA and confirm it cannot fall back to the seed, including an
+  already open merchant tab. Check changes while a login is in progress.
+- Sign out/revoke Master role and verify rows, config fields, dialogs and live
+  listeners are cleared. Verify mobile navigation, dialogs and logout.
+- Check actual products/orders/settings, catalog updates, drive/media uploads,
+  presigned downloads and a shipment email to a test recipient.
+
+Live Firebase, deployed browser layout/routing and R2/Resend have not been tested
+from this environment. No production resources were changed by producing the ZIP.

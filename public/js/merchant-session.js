@@ -1,8 +1,10 @@
-// Shared by the landing-page modal and admin bridge. No Master Auth dependency.
+// Shared by both entry points. Master directory reads require no Master login.
 import { initializeApp, deleteApp } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js';
 import { getAuth, setPersistence, browserSessionPersistence, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js';
 import { getFirestore, doc, getDocFromServer, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js';
-import { normalizeMerchantEmail, resolveMerchantStore, portalError, storeApiUrl } from './tenant-config.js';
+import { normalizeMerchantEmail, portalError, storeApiUrl } from './tenant-config.js';
+import { findMerchantStore, watchMerchantDirectory } from './merchant-directory.js';
+import { connectionKey } from './agency-model.js';
 
 export let app = null;
 export let db = null;
@@ -24,8 +26,8 @@ export function clearMerchantHint() {
 }
 function remember(user) {
     // This locator is NOT authorization. Restore always checks Firebase Auth,
-    // the current code-owned directory, email, UID and a server-read admin role.
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify({ version: 1, email: descriptor.email, slug: descriptor.slug, uid: user.uid }));
+    // the current Master directory, email, UID and a server-read admin role.
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({ version: 2, email: descriptor.email, projectId: tenantStore.firebaseConfig.projectId, uid: user.uid }));
     sessionStorage.removeItem(LEGACY_KEY);
 }
 async function prepare(next) {
@@ -56,13 +58,19 @@ async function verify(user) {
     if (!profile.exists() || profile.data().role !== 'admin') throw portalError('portal/access-denied', 'Ο λογαριασμός δεν έχει πρόσβαση διαχειριστή. Επικοινωνήστε με τη SQySystems.');
     // If sessionStorage is unavailable, fail here rather than redirecting the
     // merchant to a second login screen after a seemingly successful login.
+    const currentConnection = await findMerchantStore(descriptor.email);
+    if (!currentConnection || connectionKey(currentConnection) !== connectionKey(descriptor)) throw portalError('portal/session-changed', 'Η σύνδεση του καταστήματος άλλαξε. Συνδεθείτε ξανά.');
     remember(user);
     verifiedUser = user;
     return { currentUser: user, userData: profile.data(), tenantStore, storeSlug: descriptor.slug };
 }
-export function loginMerchant(email, password) {
+export function loginMerchant(email, password, { allowAgencyAccount = false } = {}) {
     return serial(async () => {
-        const next = resolveMerchantStore(email); // Never fall back to Master.
+        const next = await findMerchantStore(email);
+        if (!next) {
+            if (allowAgencyAccount) return null;
+            throw portalError('portal/unknown-merchant', 'Δεν ήταν δυνατή η σύνδεση. Ελέγξτε τα στοιχεία σας ή επικοινωνήστε με τη SQySystems.');
+        }
         if (typeof password !== 'string' || !password) throw portalError('portal/password-required', 'Συμπληρώστε τον κωδικό πρόσβασης.');
         clearMerchantHint();
         try {
@@ -86,9 +94,9 @@ export function restoreMerchantSession() {
         } catch { clearMerchantHint(); return null; }
         if (!hint) return null;
         try {
-            if (hint.version !== 1 || typeof hint.uid !== 'string' || !hint.uid) throw portalError('portal/expired', 'Συνδεθείτε ξανά.');
-            const next = resolveMerchantStore(hint.email);
-            if (hint.slug !== next.slug) throw portalError('portal/expired', 'Συνδεθείτε ξανά.');
+            if (![1,2].includes(hint.version) || typeof hint.uid !== 'string' || !hint.uid) throw portalError('portal/expired', 'Συνδεθείτε ξανά.');
+            const next = await findMerchantStore(hint.email);
+            if (!next || (hint.version === 2 && hint.projectId !== next.tenantStore.firebaseConfig.projectId)) throw portalError('portal/expired', 'Συνδεθείτε ξανά.');
             await prepare(next);
             const user = auth.currentUser;
             if (!user || user.uid !== hint.uid || normalizeMerchantEmail(user.email) !== next.email) {
@@ -103,10 +111,16 @@ export function restoreMerchantSession() {
         }
     });
 }
-export function resetMerchantPassword(email) {
+export function resetMerchantPassword(email, { allowAgencyAccount = false } = {}) {
     return serial(async () => {
-        await prepare(resolveMerchantStore(email));
+        const next = await findMerchantStore(email);
+        if (!next) {
+            if (allowAgencyAccount) return false;
+            throw portalError('portal/unknown-merchant', 'Δεν ήταν δυνατή η σύνδεση. Επικοινωνήστε με τη SQySystems.');
+        }
+        await prepare(next);
         await sendPasswordResetEmail(auth, normalizeMerchantEmail(email));
+        return true;
     });
 }
 export function logoutMerchant() {
@@ -121,6 +135,7 @@ export function watchMerchantSession(onInvalidated) {
     if (!verifiedUser) throw new Error('No verified merchant session.');
     const user = verifiedUser;
     const expectedEmail = descriptor.email;
+    const expectedConnection = connectionKey(descriptor);
     let ended = false;
     const invalidate = () => {
         if (ended) return;
@@ -135,7 +150,10 @@ export function watchMerchantSession(onInvalidated) {
         if (snapshot.metadata.fromCache || snapshot.metadata.hasPendingWrites) return;
         if (!snapshot.exists() || snapshot.data().role !== 'admin') invalidate();
     }, invalidate);
-    return () => { ended = true; unsubscribeAuth(); unsubscribeProfile(); };
+    const unsubscribeDirectory = watchMerchantDirectory(expectedEmail, next => {
+        if (!next || connectionKey(next) !== expectedConnection) invalidate();
+    }, invalidate);
+    return () => { ended = true; unsubscribeAuth(); unsubscribeProfile(); unsubscribeDirectory(); };
 }
 export function merchantErrorMessage(error) {
     if (error?.code?.startsWith('portal/')) return error.message;

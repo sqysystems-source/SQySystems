@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SQy Admin — Agency Control Plane</title>
+  <meta name="robots" content="noindex,nofollow"><meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; form-action 'self'">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="sqy-admin.css">
+</head>
+<body>
+  <section id="access-view" class="access-shell" aria-labelledby="access-title">
+    <div class="access-card">
+      <a class="wordmark" href="index.html"><span class="brand-mark">S</span> SQySystems</a>
+      <span class="eyebrow">AGENCY CONTROL PLANE</span>
+      <h1 id="access-title">Your agency.<br>One workspace.</h1>
+      <p class="muted" id="access-description">Sign in with your SQySystems administrator account.</p>
+      <p id="access-error" class="notice error" role="alert" hidden></p>
+      <form id="sqy-login-form">
+        <label>Email<input id="sqy-email" type="email" required autocomplete="username" autocapitalize="none" spellcheck="false"></label>
+        <label>Password<input id="sqy-password" type="password" required autocomplete="current-password"></label>
+        <button id="sqy-login-submit" class="button primary" type="submit">Sign in to SQy Admin <span aria-hidden="true">→</span></button>
+      </form>
+      <div class="access-links"><a href="index.html">← Back to website</a><button id="switch-master-account" class="text-button" type="button" hidden>Sign out of this account</button></div>
+    </div>
+    <div class="access-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="art-caption"><span class="status-dot"></span> BUILT FOR WHAT COMES NEXT</div></div>
+  </section>
+
+  <div id="admin-view" class="app-shell" hidden>
+    <aside class="sidebar">
+      <a class="wordmark" href="sqy-admin.html"><span class="brand-mark">S</span> SQySystems</a>
+      <div class="workspace-label">AGENCY WORKSPACE</div>
+      <nav class="side-nav" aria-label="Control plane sections">
+        <button type="button" data-section="overview" class="nav-item active"><span aria-hidden="true">◈</span> Overview</button>
+        <button type="button" data-section="clients" class="nav-item"><span aria-hidden="true">♧</span> Clients</button>
+        <button type="button" data-section="messages" class="nav-item"><span aria-hidden="true">▤</span> Contact inbox <span id="nav-unread" class="nav-count">0</span></button>
+        <button type="button" data-section="stores" class="nav-item"><span aria-hidden="true">▧</span> Store connections</button>
+      </nav>
+      <div class="sidebar-note"><span class="status-dot"></span> Master workspace<p>Clients, requests and store connections in one place.</p></div>
+      <div class="sidebar-bottom"><a href="index.html">↗ Agency website</a><div class="identity"><div id="identity-avatar" class="avatar">S</div><div><strong id="identity-name"></strong><span id="identity-role"></span></div></div><button id="sqy-logout" type="button" class="logout-button">Sign out</button></div>
+    </aside>
+    <main class="workspace">
+      <header class="topbar"><div class="breadcrumb">Workspace <span>/</span> <strong id="page-label">Overview</strong></div><div class="topbar-right"><span id="live-status" class="live-pill"><span class="status-dot"></span> Connecting</span><span id="master-email" class="small muted"></span><button id="sqy-mobile-logout" class="text-button mobile-logout" type="button">Sign out</button></div></header>
+      <div class="workspace-body">
+        <div class="page-heading"><div><span class="eyebrow">SQYSYSTEMS CONTROL PLANE</span><h1 id="page-title">Agency overview</h1><p class="muted">A clear view of your clients, conversations and next launch.</p></div><button type="button" class="button primary" data-new-connection>+ Connect e-shop</button></div>
+        <div id="global-notice" class="notice" role="status" aria-live="polite" hidden></div>
+        <section class="kpi-grid" aria-label="Agency totals">
+          <article class="kpi"><span>Registered clients</span><strong id="kpi-clients">—</strong><small>Master accounts</small></article>
+          <article class="kpi"><span>Unread contact tickets</span><strong id="kpi-unread">—</strong><small>Awaiting your attention</small></article>
+          <article class="kpi"><span>Paid client orders</span><strong id="kpi-paid">—</strong><small>Manually recorded payments</small></article>
+          <article class="kpi"><span>Active e-shops</span><strong id="kpi-stores">—</strong><small>Connected through the directory</small></article>
+        </section>
+        <div class="toolbar"><label class="search-label"><span aria-hidden="true">⌕</span><input id="global-search" type="search" placeholder="Search clients, requests or stores…" aria-label="Search workspace"></label><span class="small muted">Updates appear automatically</span></div>
+        <div class="split-layout">
+          <div class="main-column">
+            <section class="panel" id="clients-panel" data-panel="clients" aria-labelledby="clients-title">
+              <div class="panel-head"><div><h2 id="clients-title">Registered clients <span id="clients-count" class="count-pill">—</span></h2><p>People and businesses in your agency.</p></div></div>
+              <div class="table-wrap"><table><thead><tr><th>Client</th><th>Company</th><th>Role</th><th>Member since</th><th>Connection</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody id="clients-body"></tbody></table></div>
+              <div class="pagination"><span id="clients-page-label">Loading clients…</span><div><button id="clients-prev" class="button subtle small" type="button">← Previous</button><button id="clients-next" class="button subtle small" type="button">Next →</button></div></div>
+            </section>
+            <section class="panel" id="messages-panel" data-panel="messages" aria-labelledby="messages-title">
+              <div class="panel-head"><div><h2 id="messages-title">Contact inbox <span id="messages-count" class="count-pill">—</span></h2><p>Conversations started on your website.</p></div><label class="sr-only" for="ticket-filter">Filter contact tickets</label><select id="ticket-filter"><option value="all">All tickets</option><option value="unread">Unread</option><option value="read">Read</option><option value="resolved">Resolved</option></select></div>
+              <div id="messages-list" class="ticket-list"></div>
+            </section>
+            <section class="panel" id="stores-panel" data-panel="stores" aria-labelledby="stores-title">
+              <div class="panel-head"><div><h2 id="stores-title">Store connections <span id="stores-count" class="count-pill">—</span></h2><p>Manage access and launch your next client store.</p></div><button id="use-aura-seed" class="button subtle small" type="button">Use AURA seed</button></div>
+              <div class="panel-filter"><label for="store-filter" class="small muted">Show</label><select id="store-filter"><option value="current">Current connections</option><option value="active">Active</option><option value="disabled">Disabled</option><option value="deleted">Deleted</option><option value="all">All</option></select></div>
+              <div class="table-wrap"><table><thead><tr><th>Store / merchant</th><th>Plan</th><th>Status</th><th>Updated</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody id="stores-body"></tbody></table></div>
+            </section>
+          </div>
+          <aside class="paid-column" aria-labelledby="paid-title">
+            <section class="panel paid-panel"><div class="paid-heading"><span class="eyebrow">NEXT UP</span><h2 id="paid-title">Clients who paid</h2><p class="muted">Turn a paid request into a connected store.</p><button id="open-payment" class="button primary" type="button">+ Add paid client / order</button></div><div id="paid-list" class="paid-list"></div></section>
+          </aside>
+        </div>
+        <footer class="workspace-footer">SQySystems · Agency operations <span>Private workspace</span></footer>
+      </div>
+    </main>
+  </div>
+
+  <dialog id="provision-dialog" class="drawer" aria-labelledby="provision-title">
+    <div class="dialog-header"><div><span class="eyebrow">TENANT PROVISIONING</span><h2 id="provision-title">Connect an e-shop</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="Close connection form">×</button></div>
+    <form id="provision-form" class="dialog-form">
+      <p id="provision-error" class="notice error" role="alert" hidden></p>
+      <label>Choose a registered or paid client<select id="client-picker"><option value="">Select a client, or enter an email below</option></select></label>
+      <label>Merchant email<input id="merchant-email" type="email" required maxlength="254" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+      <p id="email-edit-note" class="help" hidden>The email identifies this connection. Create a separate connection to use another email.</p>
+      <div class="form-row"><label>Store name<input id="store-name" required maxlength="80" placeholder="AURA"></label><label>Plan<input id="store-plan" required maxlength="120" value="Custom E-Shop" placeholder="Custom E-Shop"></label></div>
+      <label>Store domain / API origin<input id="store-origin" type="url" required maxlength="500" placeholder="https://www.sqysystemsdev.org"></label>
+      <label>Status<select id="store-status"><option value="active">Active — merchant can sign in</option><option value="disabled">Disabled — block portal access</option></select></label>
+      <div class="form-divider"><span>Firebase web app</span></div>
+      <details class="snippet-box"><summary>Paste a Firebase JSON / JavaScript config</summary><label class="sr-only" for="config-snippet">Public Firebase configuration snippet</label><textarea id="config-snippet" rows="7" maxlength="12000" spellcheck="false" placeholder='const firebaseConfig = { apiKey: "…", authDomain: "…", projectId: "…", storageBucket: "…", messagingSenderId: "…", appId: "…" };'></textarea><button id="parse-config" type="button" class="button subtle small">Fill the six fields</button></details>
+      <p class="help">Use the public web app config. Never paste a service account, private key, R2 secret or Resend key.</p>
+      <label>API key<input id="cfg-apiKey" required maxlength="300" autocomplete="off" spellcheck="false"></label>
+      <div class="form-row"><label>Auth domain<input id="cfg-authDomain" required maxlength="300" placeholder="project.firebaseapp.com" spellcheck="false"></label><label>Project ID<input id="cfg-projectId" required maxlength="300" spellcheck="false"></label></div>
+      <label>Storage bucket<input id="cfg-storageBucket" required maxlength="300" spellcheck="false"></label>
+      <div class="form-row"><label>Messaging sender ID<input id="cfg-messagingSenderId" required maxlength="300" inputmode="numeric"></label><label>App ID<input id="cfg-appId" required maxlength="300" spellcheck="false"></label></div>
+      <div class="dialog-actions"><button type="button" class="button subtle" data-close-dialog>Cancel</button><button id="save-connection" type="submit" class="button primary">Save connection</button></div>
+    </form>
+  </dialog>
+  <dialog id="payment-dialog" class="payment-dialog" aria-labelledby="payment-title">
+    <div class="dialog-header"><div><span class="eyebrow">PAYMENT RECORD</span><h2 id="payment-title">Add a paid client / order</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="Close payment form">×</button></div>
+    <form id="payment-form" class="dialog-form">
+      <p class="help">Record an existing payment. This form does not charge a card or send an invoice.</p>
+      <p id="payment-error" class="notice error" role="alert" hidden></p>
+      <label>Client email<input id="payment-email" type="email" required maxlength="254" autocapitalize="none" spellcheck="false"></label>
+      <label>Client / business name<input id="payment-name" required maxlength="100"></label>
+      <label>What they requested / package details<textarea id="payment-package" rows="4" required maxlength="2000" placeholder="Custom E-Shop + Viva Wallet"></textarea></label>
+      <div class="form-row"><label>Amount paid (€)<input id="payment-amount" required inputmode="decimal" placeholder="700.00"></label><label>Payment date<input id="payment-date" type="date" required></label></div>
+      <div class="dialog-actions"><button type="button" class="button subtle" data-close-dialog>Cancel</button><button id="save-payment" type="submit" class="button primary">Record payment</button></div>
+    </form>
+  </dialog>
+  <script type="module" src="sqy-admin.js"></script>
+</body>
+</html>

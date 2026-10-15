@@ -4,39 +4,93 @@ service cloud.firestore {
     function isOwner(uid) {
       return request.auth != null && request.auth.uid == uid;
     }
+    function isSuperAdmin() {
+      return request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'superadmin'];
+    }
+    function validEmail(email) {
+      return email is string && email.size() <= 254
+        && email.matches('^[^/@\\s]+@[^/@\\s]+\\.[^/@\\s]{2,}$');
+    }
+    function validWebConfig(c) {
+      return c is map
+        && c.keys().hasOnly(['apiKey','authDomain','projectId','storageBucket','messagingSenderId','appId'])
+        && c.keys().hasAll(['apiKey','authDomain','projectId','storageBucket','messagingSenderId','appId'])
+        && c.apiKey is string && c.apiKey.size() > 0 && c.apiKey.size() <= 300
+        && c.authDomain is string && c.authDomain.size() <= 300 && c.authDomain.matches('^[A-Za-z0-9.-]+[.][A-Za-z]{2,}$')
+        && c.projectId is string && c.projectId.matches('^[a-z][a-z0-9-]{4,28}[a-z0-9]$') && c.projectId != 'sqysystems-faa0e'
+        && c.storageBucket is string && c.storageBucket.size() > 0 && c.storageBucket.size() <= 300
+        && c.messagingSenderId is string && c.messagingSenderId.size() <= 300 && c.messagingSenderId.matches('^[0-9]+$')
+        && c.appId is string && c.appId.size() <= 300 && c.appId.matches('^1:[0-9]+:web:[A-Za-z0-9]+$');
+    }
+    function validStore(data, storeId) {
+      return data.keys().hasOnly(['merchantEmail','storeName','storeApiBaseUrl','plan','status','firebaseConfig','updatedAt'])
+        && data.keys().hasAll(['merchantEmail','storeName','storeApiBaseUrl','plan','status','firebaseConfig','updatedAt'])
+        && validEmail(data.merchantEmail) && data.merchantEmail == storeId && data.merchantEmail == data.merchantEmail.lower()
+        && data.storeName is string && data.storeName.size() > 0 && data.storeName.size() <= 80
+        && data.storeApiBaseUrl is string && data.storeApiBaseUrl.size() <= 500
+        && data.storeApiBaseUrl.matches('^https://[A-Za-z0-9-]+([.][A-Za-z0-9-]+)+$')
+        && data.plan is string && data.plan.size() > 0 && data.plan.size() <= 120
+        && data.status in ['active','disabled','deleted'] && validWebConfig(data.firebaseConfig)
+        && data.updatedAt == request.time;
+    }
+    function validPayment(data) {
+      return data.keys().hasOnly(['clientEmail','clientName','packageDetails','amountCents','currency','status','source','paidAt','createdBy','createdAt','updatedAt'])
+        && data.keys().hasAll(['clientEmail','clientName','packageDetails','amountCents','currency','status','source','paidAt','createdBy','createdAt','updatedAt'])
+        && validEmail(data.clientEmail) && data.clientEmail == data.clientEmail.lower()
+        && data.clientName is string && data.clientName.size() > 0 && data.clientName.size() <= 100
+        && data.packageDetails is string && data.packageDetails.size() > 0 && data.packageDetails.size() <= 2000
+        && data.amountCents is int && data.amountCents > 0 && data.amountCents <= 100000000
+        && data.currency == 'EUR' && data.status in ['paid','refunded','cancelled'] && data.source == 'manual'
+        && data.paidAt is timestamp && data.createdBy is string && data.createdAt is timestamp
+        && data.updatedAt == request.time;
+    }
     match /users/{userId} {
-      allow read: if isOwner(userId);
-      // General agency client profiles remain available. Store routing is
-      // agency-controlled and is no longer editable through client profiles.
+      allow get: if isOwner(userId) || isSuperAdmin();
+      allow list: if isSuperAdmin();
       allow create: if isOwner(userId)
         && request.resource.data.uid == request.auth.uid
         && (!('role' in request.resource.data) || request.resource.data.role == 'client')
-        && !request.resource.data.keys().hasAny(['tenantStore', 'storeSlug']);
+        && !request.resource.data.keys().hasAny(['tenantStore','storeSlug']);
       allow update: if isOwner(userId)
         && request.resource.data.uid == resource.data.uid
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'tenantStore', 'storeSlug']);
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role','tenantStore','storeSlug']);
       allow delete: if false;
     }
-    // Reserved for trusted agency Admin SDK/Console operations. This version
-    // routes from the code-owned directory; no public email lookup is needed.
-    match /store_directory/{storeId} {
-      allow read, write: if false;
-    }
     match /messages/{messageId} {
-      allow create: if request.resource.data.keys().hasOnly(['name', 'email', 'message', 'uid', 'createdAt', 'source'])
-        && request.resource.data.keys().hasAll(['name', 'email', 'message', 'createdAt'])
-        && request.resource.data.name is string
-        && request.resource.data.name.size() >= 2 && request.resource.data.name.size() <= 100
-        && request.resource.data.email is string && request.resource.data.email.size() <= 200
-        && request.resource.data.email.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]{2,}$')
-        && request.resource.data.message is string
-        && request.resource.data.message.size() >= 10 && request.resource.data.message.size() <= 2000
+      allow create: if request.resource.data.keys().hasOnly(['name','email','message','uid','createdAt','source'])
+        && request.resource.data.keys().hasAll(['name','email','message','createdAt'])
+        && request.resource.data.name is string && request.resource.data.name.size() >= 2 && request.resource.data.name.size() <= 100
+        && validEmail(request.resource.data.email) && request.resource.data.email.size() <= 200
+        && request.resource.data.message is string && request.resource.data.message.size() >= 10 && request.resource.data.message.size() <= 2000
         && request.resource.data.createdAt == request.time
         && (!('uid' in request.resource.data) || request.resource.data.uid == null
           || (request.auth != null && request.resource.data.uid == request.auth.uid))
-        && (!('source' in request.resource.data)
-          || (request.resource.data.source is string && request.resource.data.source.size() <= 100));
-      allow read, update, delete: if false;
+        && (!('source' in request.resource.data) || (request.resource.data.source is string && request.resource.data.source.size() <= 100));
+      allow read, delete: if isSuperAdmin();
+      allow update: if isSuperAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt'])
+        && request.resource.data.status in ['unread','read','resolved']
+        && request.resource.data.updatedAt == request.time;
+    }
+    match /client_payments/{paymentId} {
+      allow read, delete: if isSuperAdmin();
+      allow create: if isSuperAdmin() && validPayment(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time;
+      allow update: if isSuperAdmin() && validPayment(request.resource.data)
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+    match /merchant_stores/{storeId} {
+      // Only public WEB configuration is stored in this get-readable record.
+      // The router must be able to confirm a missing doc before using its seed.
+      allow get: if true;
+      allow list: if isSuperAdmin();
+      allow create, update: if isSuperAdmin() && validStore(request.resource.data, storeId);
+      allow delete: if isSuperAdmin();
+    }
+    match /store_directory/{storeId} {
+      allow read, write: if false;
     }
     match /{document=**} {
       allow read, write: if false;

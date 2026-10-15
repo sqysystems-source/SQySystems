@@ -4,21 +4,55 @@
   "buildCommand": "",
   "outputDirectory": ".",
   "redirects": [
-    { "source": "/customer.html", "destination": "/public/admin.html", "permanent": false }
+    {
+      "source": "/customer.html",
+      "destination": "/public/admin.html",
+      "permanent": false
+    }
   ],
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "X-Frame-Options", "value": "DENY" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "Content-Security-Policy", "value": "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" }
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+        }
       ]
     },
     {
       "source": "/public/(.*)",
-      "headers": [{ "key": "Cache-Control", "value": "no-store" }]
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/sqy-admin(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        },
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
     }
   ]
 }

@@ -29,7 +29,8 @@
         <a href="#why-us" class="nav__link">Why Us</a>
         <a href="#contact" class="nav__link">Contact</a>
         <a href="#dashboard" class="nav__link is-auth-only" hidden>Dashboard</a>
-        <a href="public/admin.html" class="btn btn--primary">Open Store Admin Panel</a>
+        <a href="public/admin.html" class="btn btn--primary" data-user-only hidden>Open Store Admin Panel</a>
+        <a href="sqy-admin.html" class="btn btn--outline" data-sqy-admin hidden>SQy Admin</a>
 
         <!-- Mobile-only auth buttons (mirrored in the desktop actions) -->
         <div class="nav__actions-mobile" data-auth-actions>
@@ -316,6 +317,7 @@
             <p id="dashStoreName">Your store workspace is managed by SQySystems. Sign in to manage orders, products and settings.</p>
             <p>Your store data stays in its dedicated Firebase project.</p>
             <a class="btn btn--light" href="public/admin.html">Open Store Admin Panel</a>
+            <a class="btn btn--light" href="sqy-admin.html" data-sqy-admin hidden>SQy Admin</a>
           </article>
         </div>
       </div>

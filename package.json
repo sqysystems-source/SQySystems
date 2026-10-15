@@ -1,6 +1,9 @@
 {
-  "name": "sqysystems-managed-merchant-portal",
+  "name": "sqysystems-agency-control-plane",
   "private": true,
   "type": "module",
-  "scripts": { "test": "node --experimental-vm-modules --test tests/*.test.mjs" }
+  "scripts": {
+    "test": "node --experimental-vm-modules --test tests/*.test.mjs",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-sqysystems \"node tests/firestore-rules.emulator.mjs\""
+  }
 }

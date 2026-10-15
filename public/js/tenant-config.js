@@ -1,4 +1,4 @@
-// AGENCY-OWNED DIRECTORY. Edit this file and deploy the agency portal.
+// AURA fallback/seed. Master merchant_stores records take precedence.
 // Only public Firebase WEB config belongs here; never service-account/R2/Resend secrets.
 
 // ===== AURA: paste the SIX web config values here ONCE =====

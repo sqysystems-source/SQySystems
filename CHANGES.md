@@ -1,29 +1,34 @@
-# Managed Agency Portal upgrade
+# SQySystems Super-Admin Control Plane
 
-Baseline: all 24 files in the latest supplied `sqysystems(1).txt`, not an older
-project export.
+Baseline: all 30 supplied files in the latest `sqysystems(2).txt`.
 
-- Removed the entire tenant setup screen and every Configure Store control.
-- Replaced Master-then-tenant login with one direct tenant email/password login.
-- Added the agency-owned STORE_DIRECTORY and a single AURA_FIREBASE_CONFIG block
-  in tenant-config.js. AURA email/domain/project are configured; the real four
-  unavailable web values remain explicit placeholders for the agency to fill.
-- Added merchant-session.js shared by the landing modal and portal, including
-  tenant role checks, same-tab session restore, password reset, safe retry,
-  account isolation and live revocation/logout handling.
-- Updated landing-page auth to redirect registered merchants after one tenant
-  login; preserved ordinary agency client accounts and made the admin link
-  visible without Master login. Registered merchants cannot create duplicate
-  Master accounts through signup.
-- Removed stale setup dependencies from admin.js, simplified portal CSS and
-  changed sidebar identity to show only the merchant email, not project details.
-- Locked routing fields in Master profile rules. Client directory access is
-  denied; static registry routing needs no Master Firestore read.
-- Kept existing admin feature modules, API routing and Firebase SDK versions.
-  Added a favicon fallback referenced but absent from the latest text export.
+- Added the Master-only `sqy-admin.html`, dedicated responsive CSS and root
+  controller, with live KPIs, registered clients, contact tickets, paid-client
+  side panel, manual payment entry and a provisioning drawer.
+- Added shared agency models and Master data service: server role checks,
+  protected listeners, status/delete actions, euro-cent validation, exact public
+  connection projection and optimistic transactions for concurrent edits.
+- Added `merchant-directory.js`: server-only pre-login document gets from
+  `merchant_stores/{emailLower}`, active-record override, confirmed-missing AURA
+  fallback and fail-closed disabled/deleted/malformed/network behavior.
+- Updated merchant login/reset/restore and live session monitoring for dynamic
+  mappings while preserving one-step tenant Auth and tenant admin verification.
+  New locators store version/email/project/UID; old locators can migrate after
+  fresh checks. Directory changes during sign-in are checked before opening UI.
+- Kept the latest supplied AURA web config as seed, unchanged. Delete creates a
+  blocked tombstone so removing AURA cannot accidentally re-enable its fallback.
+- Hid the navbar Store Admin link for guests and added independently role-gated
+  SQy Admin links in navbar/dashboard, with live Master profile role monitoring.
+- Corrected contact labels/counter contrast with scoped selectors that outrank
+  the later generic form styles, including the nested counter number.
+- Updated Master rules for admin/superadmin role checks, user directory access,
+  ticket management, private manual payments and public-get/admin-list directory
+  routing, including field validation and self-promotion prevention.
+- Added 35 isolated tests plus a separate real Rules emulator suite and updated
+  deployment documentation. Added local emulator/no-store control-plane config.
+  Supplied a fallback favicon whose bytes were absent from the text export.
 
-Validation: 28 isolated tests passed, including actual ES module graph linking,
-syntax, both login entry points, role gates, session restore/tampering,
-wrong-password/storage/network failures, store isolation and preserved agency
-flows. Tests use mocked Firebase/DOM/feature initialization, not live projects.
-Live browser/Firebase Rules/R2/Resend validation remains in DEPLOYMENT.md.
+The tenant admin feature modules, existing price/taxonomy/catalog behavior,
+Firebase SDK version, store API routing and CORS instructions were retained.
+No remote data/accounts/rules/deployments were changed. Isolated tests passed;
+actual browser, Firestore emulator and live service checks remain as documented.

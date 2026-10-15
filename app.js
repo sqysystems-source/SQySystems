@@ -15,7 +15,8 @@
  *   8. Bootstrap        – wires everything and starts onAuthStateChanged
  */
 import { auth, db, isFirebaseConfigured } from "./firebase-config.js";
-import { hasManagedMerchant } from "./public/js/tenant-config.js";
+import { findMerchantStore } from "./public/js/merchant-directory.js";
+import { canManageAgency } from "./public/js/agency-model.js";
 import { loginMerchant, resetMerchantPassword, logoutMerchant, merchantErrorMessage } from "./public/js/merchant-session.js";
 import {
   createUserWithEmailAndPassword,
@@ -30,6 +31,8 @@ import {
   collection,
   addDoc,
   getDoc,
+  getDocFromServer,
+  onSnapshot,
   setDoc,
   updateDoc,
   serverTimestamp,
@@ -378,7 +381,7 @@ const AuthService = {
   },
 
   async getProfile(uid) {
-    const snap = await getDoc(doc(db, "users", uid));
+    const snap = await getDocFromServer(doc(db, "users", uid));
     return snap.exists() ? snap.data() : null;
   },
 
@@ -418,6 +421,7 @@ const View = {
     $$("[data-user-only], .is-auth-only").forEach((el) => (el.hidden = true));
     $("#dashboard").hidden = true;
     $("#navWelcome").textContent = "";
+    $$("[data-sqy-admin]").forEach(el => { el.hidden = true; });
 
     // Remove contact-form values that were auto-filled from the previous user's account
     $$("#contactForm [data-prefilled]").forEach((input) => {
@@ -432,6 +436,7 @@ const View = {
     $$("[data-guest-only]").forEach((el) => (el.hidden = true));
     $$("[data-user-only], .is-auth-only").forEach((el) => (el.hidden = false));
     $("#navWelcome").textContent = `Welcome, ${firstName(name)}`;
+    $$("[data-sqy-admin]").forEach(el => { el.hidden = !canManageAgency(profile); });
 
     $("#dashboard").hidden = false;
     $("#dashWelcome").textContent = `Welcome, ${name}`;
@@ -458,6 +463,8 @@ const state = {
   user: null,
   profile: null,
   signingUp: false, // prevents the auth observer from racing the profile write
+  stopProfile: null,
+  authEpoch: 0,
 };
 
 async function refreshProfile(user) {
@@ -467,7 +474,7 @@ async function refreshProfile(user) {
     console.warn("[SQySystems] Could not load profile:", err.code || err);
     state.profile = null;
   }
-  View.renderUser(user, state.profile);
+  if (auth.currentUser?.uid === user.uid) View.renderUser(user, state.profile);
 }
 
 function initModalTriggers() {
@@ -509,34 +516,31 @@ function initLoginForm() {
     markInvalid(password, !password.value);
     if (bad) return setMessage(msg, "Please enter a valid email address.");
     if (!password.value) return setMessage(msg, "Please enter your password.");
-    const merchant = hasManagedMerchant(emailVal);
-    if (!merchant && !guardConfig(msg)) return;
     const enteredPassword = password.value;
     password.value = "";
     busy = true;
     forgot.disabled = true;
     setLoading(submit, true);
     try {
+      // One authoritative Master directory lookup before choosing the auth
+      // project. Disabled/malformed/network failures never fall back to Master.
+      const merchant = await loginMerchant(emailVal, enteredPassword, { allowAgencyAccount: true });
       if (merchant) {
-        await loginMerchant(emailVal, enteredPassword);
         Modal.close();
-        // Same origin + same named app + session persistence: no credentials
-        // cross a URL, storage handoff, postMessage or second login form.
         window.location.assign(new URL("./public/admin.html", import.meta.url).href);
       } else {
-        // Preserve the agency's existing general client accounts.
+        if (!guardConfig(msg)) return;
         await AuthService.login(emailVal, enteredPassword);
         Modal.close();
       }
     } catch (err) {
-      setMessage(msg, merchant ? merchantErrorMessage(err) : friendlyError(err));
+      setMessage(msg, err?.code?.startsWith("portal/") ? merchantErrorMessage(err) : friendlyError(err));
     } finally {
       busy = false;
       forgot.disabled = false;
       setLoading(submit, false);
     }
   });
-
   forgot.addEventListener("click", async () => {
     if (busy) return;
     const emailVal = email.value.trim();
@@ -545,17 +549,18 @@ function initLoginForm() {
       email.focus();
       return setMessage(msg, "Enter your email above, then click “Forgot password?”.");
     }
-    const merchant = hasManagedMerchant(emailVal);
-    if (!merchant && !guardConfig(msg)) return;
     busy = true;
     forgot.disabled = true;
     setLoading(submit, true);
     try {
-      if (merchant) await resetMerchantPassword(emailVal);
-      else await AuthService.resetPassword(emailVal);
+      const merchant = await resetMerchantPassword(emailVal, { allowAgencyAccount: true });
+      if (!merchant) {
+        if (!guardConfig(msg)) return;
+        await AuthService.resetPassword(emailVal);
+      }
       setMessage(msg, "If this account exists, a password reset email will arrive shortly.", "success");
     } catch (err) {
-      setMessage(msg, merchant ? merchantErrorMessage(err) : friendlyError(err));
+      setMessage(msg, err?.code?.startsWith("portal/") ? merchantErrorMessage(err) : friendlyError(err));
     } finally {
       busy = false;
       forgot.disabled = false;
@@ -586,12 +591,15 @@ function initSignupForm() {
     for (const [input, ok] of checks) markInvalid(input, !ok);
     const failed = checks.find(([, ok]) => !ok);
     if (failed) return setMessage(msg, failed[2]);
-    if (hasManagedMerchant(emailVal)) return setMessage(msg, "Your store account is managed by SQySystems. Please log in with your existing store credentials.");
     if (!guardConfig(msg)) return;
 
     setLoading(submit, true);
     state.signingUp = true;
     try {
+      if (await findMerchantStore(emailVal)) {
+        state.signingUp = false;
+        return setMessage(msg, "Your store account is managed by SQySystems. Please log in with your existing store credentials.");
+      }
       const user = await AuthService.signUp({ name: nameVal, email: emailVal, password: password.value });
       state.signingUp = false;
       Modal.close();
@@ -739,7 +747,11 @@ function init() {
 
   // Single source of truth for authentication state.
   onAuthStateChanged(auth, async (user) => {
+    const ticket = ++state.authEpoch;
+    state.stopProfile?.();
+    state.stopProfile = null;
     state.user = user;
+    $$("[data-sqy-admin]").forEach(el => { el.hidden = true; });
 
     if (!user) {
       state.profile = null;
@@ -751,6 +763,12 @@ function init() {
     if (state.signingUp) return;
 
     await refreshProfile(user);
+    if (ticket !== state.authEpoch || auth.currentUser?.uid !== user.uid) return;
+    state.stopProfile = onSnapshot(doc(db, "users", user.uid), { includeMetadataChanges: true }, snapshot => {
+      if (ticket !== state.authEpoch || auth.currentUser?.uid !== user.uid || snapshot.metadata.fromCache || snapshot.metadata.hasPendingWrites) return;
+      state.profile = snapshot.exists() ? snapshot.data() : null;
+      View.renderUser(user, state.profile);
+    }, () => { if (ticket === state.authEpoch) $$("[data-sqy-admin]").forEach(el => { el.hidden = true; }); });
     AuthService.touchLastLogin(user.uid).catch(() => {});
   });
 }
