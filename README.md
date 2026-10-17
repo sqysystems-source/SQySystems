@@ -1,6 +1,6 @@
 # SQySystems — Agency Control Plane
 
-Complete integrated project upgraded from the **latest `sqysystems(2).txt`**.
+Complete integrated project based on the supplied **`SQySystems-main (4).zip`**, including the landing-session fix.
 The existing merchant workspace remains at `/public/admin.html`; the agency's
 new Master-only workspace is **`/sqy-admin.html`**.
 
@@ -16,11 +16,27 @@ new Master-only workspace is **`/sqy-admin.html`**.
 4. Open `/sqy-admin.html` and sign in with the **Master account**, not a tenant
    customer's credentials. After sign-in, the landing page also shows SQy Admin
    in its navbar/dashboard for this Master role.
-5. Click **Use AURA seed**, check the populated values, then **Save connection**
-   to migrate the current AURA mapping into Master without retyping its keys.
+5. Store connections come exclusively from Master `merchant_stores/{emailLower}`.
+   Existing connections are retained. There is no local AURA fallback.
 
-The supplied latest AURA config is preserved exactly. No placeholder keys were
-introduced. See [DEPLOYMENT.md](DEPLOYMENT.md) for the complete launch checklist.
+## Landing-session fix (17 October 2026)
+
+Merchant login authenticates the external store's Firebase Auth. The landing
+page now restores that same verified session on return instead of checking only
+Master Auth. Returning to the homepage stays on the homepage with the merchant
+shown as signed in, the connected store name, Logout and Open Store Admin Panel.
+A new login still redirects to the store admin as before.
+
+Restoration rechecks actual Firebase Auth, directory status, UID/email and the
+tenant's admin role. Local storage alone never grants access. Directory/profile
+changes revoke the landing session too. Navigation preserves the session;
+Logout ends it. Browser back/forward cache restoration reloads to revalidate.
+
+Master and tenant identities remain separate. A Master Firestore profile is not
+proof of Master Auth sign-in. Tenant sessions show the tenant profile and cannot
+edit Master company details or gain SQy Admin access. The agency profile form
+remains available to independently signed-in Master users. No second login,
+credential copying or automatic Master account creation was added.
 
 ## What's in SQy Admin
 
@@ -57,7 +73,7 @@ password reset and remembered-session restore.
 
 1. Existing active record → use its config, then authenticate in the tenant and
    verify `users/{tenantUid}.role === 'admin'` from that tenant's server.
-2. Confirmed missing record → use the current AURA static seed, if assigned.
+2. Confirmed missing record → no merchant connection; direct portal login is denied. The homepage may use ordinary Master login for an agency account.
 3. Disabled, deleted or malformed record → block; never fall back to the seed or
    attempt the merchant password against Master.
 4. Master network/permission failure → fail closed, rather than using stale cache
@@ -70,8 +86,8 @@ against current routing, Firebase identity and tenant admin role on reload.
 
 **Delete retains a `status: "deleted"` tombstone.** It disappears from the default
 connections view but remains available under Deleted for restore/edit. Keeping
-this record stops AURA's seed from re-enabling access after deletion. Hard-deleting
-that document directly in the Console would restore seed fallback for AURA.
+this record allows restoring/editing the connection from the Deleted filter.
+There is no local seed; a missing document cannot authorize merchant access.
 Disabling a portal connection does not revoke a tenant's underlying Firebase
 admin role or direct API credentials; revoke that tenant role separately when
 all store access must end.
@@ -106,7 +122,7 @@ use the homepage's normal Master login/profile flow.
 ## Landing page fixes
 
 The navbar's Open Store Admin Panel button defaults to hidden and is shown only
-in the authenticated Master view. Guests retain Login/Sign Up. Merchants signing
+in either the verified merchant view or the authenticated Master view. Guests retain Login/Sign Up. Merchants signing
 in through the login modal still go straight to their store workspace. SQy Admin
 links are independently gated on the verified Master role.
 
@@ -120,8 +136,8 @@ styles that previously made the labels dark.
 npm test
 ```
 
-**35 isolated tests passed** (Node 24): both login entry points, dynamic override
-and seed behavior, fail-closed disabled/deleted/error cases, role gates and
+**55 isolated tests passed** (Node 24): both login entry points, landing-session
+round trips, dynamic routing with no local fallback, fail-closed disabled/deleted/error cases, role gates and
 revocation, provisioning/optimistic edits, manual payments, paid-client setup,
 message lifecycle, HTML escaping, safe snippet parsing, navigation visibility,
 local assets, JS syntax and the actual ES module import/export graph.
@@ -136,3 +152,5 @@ installing its local test dependencies; see DEPLOYMENT.md. It was **not run here
 the emulator/test SDK dependencies were unavailable. Real browser layout,
 production Firebase login/rules, Vercel routing, R2 and Resend remain acceptance
 checks. No production data, account, payment, rule or deployment was changed.
+
+Current verification details and legacy-test notes: [TEST_RESULTS.md](TEST_RESULTS.md).

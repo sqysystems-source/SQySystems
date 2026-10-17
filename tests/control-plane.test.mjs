@@ -42,8 +42,8 @@ test('paid-order setup and provisioning form work together with real parser and 
  const email='store@example.com';const records=new Map([[MASTER+'/client_payments/payment',{clientEmail:email,clientName:'Store Client',packageDetails:'Custom E-Shop + Viva Wallet',amountCents:70000,status:'paid'}]]);const p=await harness({entry:'sqy-admin.js',masterSigned:true,records});await p.click({'data-setup-email':email});assert.equal(p.byId('merchant-email').value,email);assert.equal(p.byId('provision-dialog').open,true);
  p.byId('config-snippet').value='const firebaseConfig = '+JSON.stringify(fakeConfig(TENANT))+';';await p.byId('parse-config').emit('click');assert.equal(p.byId('cfg-projectId').value,TENANT);p.byId('store-name').value='Store';p.byId('store-origin').value='https://store.example.com';p.byId('store-status').value='active';await p.byId('provision-form').emit('submit');await tick();assert.equal(p.byId('provision-dialog').open,false);assert.equal(p.byId('kpi-stores').textContent,'1');assert.match(p.byId('paid-list').innerHTML,/Store Connected/);
 });
-test('AURA seed button prefills config but never writes before explicit save',async()=>{
- const p=await harness({entry:'sqy-admin.js',masterSigned:true});await p.byId('use-aura-seed').emit('click');assert.equal(p.byId('merchant-email').value,EMAIL);assert.equal(p.byId('cfg-projectId').value,TENANT);assert.equal(p.state.calls.filter(c=>c.type==='write').length,0);
+test('legacy AURA button cannot restore removed hardcoded config',async()=>{
+ const p=await harness({entry:'sqy-admin.js',masterSigned:true});await p.byId('use-aura-seed').emit('click');assert.equal(p.byId('merchant-email').value,EMAIL);assert.equal(p.byId('cfg-projectId').value,'');assert.equal(p.state.calls.filter(c=>c.type==='write').length,0);
 });
 test('mobile Master logout clears the private workspace and all subscriptions',async()=>{
  const p=await harness({entry:'sqy-admin.js',masterSigned:true});await p.byId('sqy-mobile-logout').emit('click');await tick();assert.equal(p.byId('admin-view').hidden,true);assert.equal(p.byId('master-email').textContent,'');assert.equal(p.state.listeners.length,0);

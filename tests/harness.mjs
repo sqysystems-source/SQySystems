@@ -12,7 +12,7 @@ class Element{
  constructor(attrs={}){this.attrs=attrs;this.id=attrs.id;this.hidden='hidden'in attrs;this.value=attrs.value||'';this.defaultValue=this.value;this.textContent='';this.innerHTML='';this.disabled=false;this.readOnly=false;this.open=false;this.handlers={};this.style={};this.dataset=Object.fromEntries(Object.entries(attrs).filter(([k])=>k.startsWith('data-')).map(([k,v])=>[k.slice(5).replace(/-([a-z])/g,(_,c)=>c.toUpperCase()),v]));const values=new Set((attrs.class||'').split(/\s+/));this.classList={add:(...keys)=>keys.forEach(k=>values.add(k)),remove:(...keys)=>keys.forEach(k=>values.delete(k)),contains:k=>values.has(k),replace:(a,b)=>{if(values.has(a)){values.delete(a);values.add(b)}},toggle:(k,f)=>{const on=f===undefined?!values.has(k):f;if(on)values.add(k);else values.delete(k)}};}
  addEventListener(type,fn){(this.handlers[type]||=[]).push(fn)}
  async emit(type){for(const fn of this.handlers[type]||[])await fn({preventDefault(){},stopImmediatePropagation(){},target:this})}
- setAttribute(k,v){this.attrs[k]=v}getAttribute(k){return this.attrs[k]}focus(){}reset(){}showModal(){this.open=true}close(){this.open=false}
+ appendChild(){} remove(){} setAttribute(k,v){this.attrs[k]=v}getAttribute(k){return this.attrs[k]}focus(){}reset(){}showModal(){this.open=true}close(){this.open=false}
  closest(selector){if(/^\[[\w-]+\]$/.test(selector)&&selector.slice(1,-1)in this.attrs)return this;return null}
  querySelector(){return null}querySelectorAll(){return []}
 }
@@ -39,7 +39,7 @@ const key=ref=>ref.db.app.options.projectId+'/'+ref.path;
 function single(ref){const data=m.records.get(key(ref));return {id:ref.path.split('/').pop(),exists:()=>data!==undefined,data:()=>data,metadata:{fromCache:false,hasPendingWrites:false}}}
 function snapshot(ref){if(ref.kind==='doc')return single(ref);const prefix=key(ref)+'/';const docs=[...m.records].filter(([k])=>k.startsWith(prefix)&&!k.slice(prefix.length).includes('/')).map(([k,data])=>({id:k.slice(prefix.length),data:()=>data}));return {docs,metadata:{fromCache:false,hasPendingWrites:false}}}
 function record(type,ref){m.calls.push({type,project:ref.db.app.options.projectId,path:ref.path})}
-export async function getDocFromServer(ref){record('read',ref);if(ref.db.app.options.projectId==='sqysystems-faa0e'&&ref.path.startsWith('merchant_stores/'))m.directoryReadHook?.();if(m.directoryFailure&&ref.db.app.options.projectId==='sqysystems-faa0e'&&ref.path.startsWith('merchant_stores/'))throw Object.assign(new Error('Directory failure'),{code:m.directoryFailure});return single(ref)}
+export async function getDocFromServer(ref){record('read',ref);await m.readHook?.(ref);if(ref.db.app.options.projectId==='sqysystems-faa0e'&&ref.path.startsWith('merchant_stores/'))m.directoryReadHook?.();if(m.directoryFailure&&ref.db.app.options.projectId==='sqysystems-faa0e'&&ref.path.startsWith('merchant_stores/'))throw Object.assign(new Error('Directory failure'),{code:m.directoryFailure});return single(ref)}
 export const getDoc=getDocFromServer;
 function resolveValues(value){if(value?.__serverTimestamp)return {seconds:++m.clock,nanoseconds:0};if(Array.isArray(value))return value.map(resolveValues);if(value&&typeof value==='object'&&!value.toMillis&&!value.toDate)return Object.fromEntries(Object.entries(value).map(([k,v])=>[k,resolveValues(v)]));return value}
 function write(ref,data,merge=false){record('write',ref);m.records.set(key(ref),{...(merge?m.records.get(key(ref)):{}),...resolveValues(data)});m.emit(ref.db.app.options.projectId,ref.path)}
@@ -59,10 +59,11 @@ export async function harness(options={}){
   if(selector.includes(','))return [...new Set(selector.split(',').flatMap(s=>selectAll(s.trim())))];
   if(/^\[[\w-]+\]$/.test(selector)){const attr=selector.slice(1,-1);return nodes.filter(n=>attr in n.attrs)}
   if(selector==='.is-auth-only')return nodes.filter(n=>(n.attrs.class||'').split(/\s+/).includes('is-auth-only'));
+  if(selector==='#contactForm [data-prefilled]')return nodes.filter(n=>n.id?.startsWith('contact')&&n.dataset.prefilled);
   if(/^#(?:provision-dialog|payment-dialog) (?:input|textarea)$/.test(selector))return nodes.filter(n=>n.id&&/^(merchant-|store-|cfg-|config-snippet|payment-)/.test(n.id));
   return [];
  };
- const document={title:'',body:{style:{}},getElementById:byId,querySelector:s=>s.startsWith('#')?byId(s.slice(1)):null,querySelectorAll:selectAll,addEventListener(type,fn){(events[type]||=[]).push(fn)}};
+ const document={title:'',createElement:()=>new Element(),body:{style:{},classList:new Element().classList},getElementById:byId,querySelector:s=>s.startsWith('#')?byId(s.slice(1)):null,querySelectorAll:selectAll,addEventListener(type,fn){(events[type]||=[]).push(fn)}};
  for(const id of ['ticket-filter','store-filter'])if(byId(id))byId(id).value=id==='ticket-filter'?'all':'current';
  const entries=options.storage||new Map();if(options.masterSigned)entries.set('mock-auth:'+MASTER,JSON.stringify({uid:'master-uid',email:'owner@sqysystems.com'}));
  const sessionStorage={getItem:k=>entries.get(k)??null,setItem(k,v){if(options.failHintWrite&&k==='sqysystems:managed-merchant:v1')throw Object.assign(new Error('Full'),{name:'QuotaExceededError'});entries.set(k,String(v))},removeItem:k=>entries.delete(k)};
@@ -71,17 +72,19 @@ export async function harness(options={}){
  if(!records.has(TENANT+'/users/tenant-uid'))records.set(TENANT+'/users/tenant-uid',{uid:'tenant-uid',role:options.nonAdmin?'customer':'admin'});
  const state={records,calls:[],listeners:[],authListeners:[],auths:{},clock:1792100000,autoId:0,directoryFailure:options.directoryFailure,failPersistence:options.failPersistence,wrongAuthEmail:options.wrongAuthEmail};
  let destination;const location={href:'https://sqysystems.com/'+htmlName,assign:u=>{destination=u},replace:u=>{destination=u},reload:()=>{destination=location.href}};const featureCalls=[];
- const window={__mock:state,__feature:(name,context)=>featureCalls.push({name,context}),location,dispatchEvent(){},addEventListener(){},scrollTo(){},confirm:()=>true};
- const context=createContext({window,document,sessionStorage,URL,URLSearchParams,console,setTimeout,clearTimeout,queueMicrotask,Map,Set,JSON,Date,Intl,Object,CustomEvent:class{}});
+ const windowEvents={};
+ const window={__mock:state,__feature:(name,context)=>featureCalls.push({name,context}),location,dispatchEvent(){},addEventListener(type,fn){(windowEvents[type]||=[]).push(fn)},scrollTo(){},confirm:()=>true};
+ const context=createContext({window,document,sessionStorage,URL,URLSearchParams,console,setTimeout:(fn,ms)=>{const timer=setTimeout(fn,ms);timer.unref();return timer;},clearTimeout,queueMicrotask,Map,Set,JSON,Date,Intl,Object,CustomEvent:class{}});
  const modules=new Map();const stubs=['admin-orders.js','admin-products.js','admin-cloud-and-logs.js','admin-settings.js','admin-analytics.js','admin-notifications.js','category-store.js','catalog-snapshot.js'];
- function load(url){if(modules.has(url))return modules.get(url);let source;if(url.includes('gstatic.com'))source=url.includes('firebase-app.js')?appMock:url.includes('firebase-auth.js')?authMock:firestoreMock;else{source=readFileSync(fileURLToPath(url),'utf8');const name=url.split('/').pop();if(stubs.includes(name))source=[...source.matchAll(/export\s+(?:async\s+)?function\s+(\w+)/g)].map(m=>`export function ${m[1]}(context){window.__feature('${m[1]}',context)}`).join('\n');if(name==='app.js')source=source.replace(/\ninit\(\);\s*$/,'\nexport { initLoginForm, initSignupForm, View, state };');}
+ function load(url){if(modules.has(url))return modules.get(url);let source;if(url.includes('gstatic.com'))source=url.includes('firebase-app.js')?appMock:url.includes('firebase-auth.js')?authMock:firestoreMock;else{source=readFileSync(fileURLToPath(url),'utf8');const name=url.split('/').pop();if(stubs.includes(name))source=[...source.matchAll(/export\s+(?:async\s+)?function\s+(\w+)/g)].map(m=>`export function ${m[1]}(context){window.__feature('${m[1]}',context)}`).join('\n');if(name==='app.js')source=source.replace(/\ninit\(\);\s*$/,'\nexport { initLoginForm, initSignupForm, initProfileForm, startLandingAuth, handleLogout, View, state };');}
  const mod=new SourceTextModule(source,{context,identifier:url,initializeImportMeta(meta){meta.url=url.startsWith(root.href)?'https://sqysystems.com/'+url.slice(root.href.length):url}});modules.set(url,mod);return mod;}
  const entry=load(new URL(entryName,root).href);const linker=(specifier,ref)=>load(new URL(specifier,ref.identifier).href);await entry.link(linker);await entry.evaluate();
- if(entryName==='app.js')entry.namespace.initLoginForm();else for(const fn of events.DOMContentLoaded||[])fn();await tick();
+ if(entryName==='app.js'){entry.namespace.initLoginForm();entry.namespace.initProfileForm();if(options.landingAuth)await entry.namespace.startLandingAuth();}else for(const fn of events.DOMContentLoaded||[])fn();await tick();
+ const emitWindow=async(type,event={})=>{for(const fn of windowEvents[type]||[])await fn(event);await tick()};
  const importModule=async name=>{const mod=load(new URL(name,root).href);if(mod.status==='unlinked')await mod.link(linker);if(mod.status!=='evaluated')await mod.evaluate();return mod.namespace};
  const session=modules.get(new URL('public/js/merchant-session.js',root).href)?.namespace;
  const login=async(email=EMAIL,password='correct-password')=>{const prefix=entryName==='app.js'?'login':entryName==='sqy-admin.js'?'sqy-':'admin-';const emailId=prefix==='login'?'loginEmail':prefix+'email';const passId=prefix==='login'?'loginPassword':prefix+'password';const form=prefix==='login'?'loginForm':prefix==='sqy-'?'sqy-login-form':'admin-login-form';byId(emailId).value=email;byId(passId).value=password;await byId(form).emit('submit');await tick()};
  const click=async attrs=>{const target=new Element(attrs);for(const fn of events.click||[])await fn({target});await tick()};
  const put=async(project,path,data)=>{records.set(project+'/'+path,data);state.emit(project,path);await tick()};
- return {entry,session,importModule,byId,nodes,state,records,entries,featureCalls,login,click,put,get destination(){return destination}};
+ return {entry,session,importModule,emitWindow,byId,nodes,state,records,entries,featureCalls,login,click,put,get destination(){return destination}};
 }

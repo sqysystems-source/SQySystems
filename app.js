@@ -17,7 +17,7 @@
 import { auth, db, isFirebaseConfigured } from "./firebase-config.js";
 import { findMerchantStore } from "./public/js/merchant-directory.js";
 import { canManageAgency } from "./public/js/agency-model.js";
-import { loginMerchant, resetMerchantPassword, logoutMerchant, merchantErrorMessage } from "./public/js/merchant-session.js";
+import { loginMerchant, restoreMerchantSession, watchMerchantSession, resetMerchantPassword, logoutMerchant, merchantErrorMessage } from "./public/js/merchant-session.js";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -404,7 +404,7 @@ const MessageService = {
       name,
       email,
       message,
-      uid: auth.currentUser?.uid ?? null,
+      uid: state.merchant ? null : (auth.currentUser?.uid ?? null),
       source: "website-contact-form",
       createdAt: serverTimestamp(),
     };
@@ -420,6 +420,11 @@ const View = {
     $$("[data-guest-only]").forEach((el) => (el.hidden = false));
     $$("[data-user-only], .is-auth-only").forEach((el) => (el.hidden = true));
     $("#dashboard").hidden = true;
+    ["dashWelcome", "dashName", "dashEmail", "dashCompany", "dashStoreName", "dashSince", "dashUid"].forEach(id => { $("#" + id).textContent = "—"; });
+    $("#companyInput").value = "";
+    $("#agencyProfilePanel").hidden = true;
+    $("#profileSave").disabled = true;
+    $("#merchantProfileNote").hidden = true;
     $("#navWelcome").textContent = "";
     $$("[data-sqy-admin]").forEach(el => { el.hidden = true; });
 
@@ -430,20 +435,25 @@ const View = {
     });
   },
 
-  renderUser(user, profile) {
+  renderUser(user, profile, merchant = null) {
     const name = profile?.displayName || user.displayName || user.email.split("@")[0];
 
     $$("[data-guest-only]").forEach((el) => (el.hidden = true));
     $$("[data-user-only], .is-auth-only").forEach((el) => (el.hidden = false));
     $("#navWelcome").textContent = `Welcome, ${firstName(name)}`;
-    $$("[data-sqy-admin]").forEach(el => { el.hidden = !canManageAgency(profile); });
+    $$("[data-sqy-admin]").forEach(el => { el.hidden = !(merchant === null && canManageAgency(profile)); });
 
     $("#dashboard").hidden = false;
     $("#dashWelcome").textContent = `Welcome, ${name}`;
     $("#dashName").textContent = name;
     $("#dashEmail").textContent = user.email;
     $("#dashCompany").textContent = profile?.company || "Not set";
-    $("#dashStoreName").textContent = "Your store workspace is managed by SQySystems. Open the admin panel to sign in.";
+    $("#dashStoreName").textContent = merchant
+      ? `Connected to ${merchant.tenantStore.storeName}. Open your admin panel to continue managing your store.`
+      : "Your store workspace is managed by SQySystems. Open the admin panel to sign in.";
+    $("#agencyProfilePanel").hidden = Boolean(merchant);
+    $("#merchantProfileNote").hidden = !merchant;
+    $("#profileSave").disabled = Boolean(merchant);
     $("#dashSince").textContent = formatDate(profile?.createdAt || user.metadata?.creationTime);
     $("#dashUid").textContent = user.uid;
     $("#companyInput").value = profile?.company || "";
@@ -465,16 +475,114 @@ const state = {
   signingUp: false, // prevents the auth observer from racing the profile write
   stopProfile: null,
   authEpoch: 0,
+  merchant: null,
+  stopMerchant: null,
+  restoringMerchant: false,
+  loggingOut: false,
+  authStarted: false,
+  disposed: false,
 };
 
-async function refreshProfile(user) {
+async function refreshProfile(user, ticket = state.authEpoch) {
+  let profile = null;
   try {
-    state.profile = await AuthService.getProfile(user.uid);
+    profile = await AuthService.getProfile(user.uid);
   } catch (err) {
     console.warn("[SQySystems] Could not load profile:", err.code || err);
-    state.profile = null;
   }
-  if (auth.currentUser?.uid === user.uid) View.renderUser(user, state.profile);
+  if (ticket !== state.authEpoch || state.merchant || state.loggingOut || state.disposed || auth.currentUser?.uid !== user.uid) return;
+  state.profile = profile;
+  View.renderUser(user, profile);
+}
+
+function renderCurrentSession() {
+  if (!state.user) View.renderGuest();
+  else View.renderUser(state.user, state.profile, state.merchant);
+}
+
+async function showMasterSession(user) {
+  const ticket = ++state.authEpoch;
+  state.stopProfile?.();
+  state.stopProfile = null;
+  if (state.merchant || state.loggingOut || state.disposed) return;
+  state.user = user;
+  state.profile = null;
+  // Clear the previous account before fetching another account's profile.
+  View.renderGuest();
+  if (!user || state.signingUp) return;
+  await refreshProfile(user, ticket);
+  if (ticket !== state.authEpoch || state.merchant || state.loggingOut || state.disposed || auth.currentUser?.uid !== user.uid) return;
+  state.stopProfile = onSnapshot(doc(db, "users", user.uid), { includeMetadataChanges: true }, snapshot => {
+    if (ticket !== state.authEpoch || state.merchant || state.loggingOut || state.disposed || auth.currentUser?.uid !== user.uid || snapshot.metadata.fromCache || snapshot.metadata.hasPendingWrites) return;
+    state.profile = snapshot.exists() ? snapshot.data() : null;
+    View.renderUser(user, state.profile);
+  }, () => { if (ticket === state.authEpoch) $$("[data-sqy-admin]").forEach(el => { el.hidden = true; }); });
+  AuthService.touchLastLogin(user.uid).catch(() => {});
+}
+
+function showMerchantSession(session) {
+  ++state.authEpoch;
+  state.stopProfile?.();
+  state.stopProfile = null;
+  state.stopMerchant?.();
+  View.renderGuest();
+  state.merchant = session;
+  state.user = session.currentUser;
+  // This is a tenant profile, never a Master profile or a Superadmin grant.
+  state.profile = session.userData;
+  renderCurrentSession();
+  state.stopMerchant = watchMerchantSession(() => { void endMerchantSession(); });
+}
+
+async function endMerchantSession() {
+  state.stopMerchant?.();
+  state.stopMerchant = null;
+  state.merchant = null;
+  state.user = state.profile = null;
+  ++state.authEpoch;
+  View.renderGuest();
+  try { await logoutMerchant(); }
+  catch (error) { console.warn("[SQySystems] Could not close store session:", error.code || error); }
+  // Never silently switch to a different Master account after revocation.
+}
+
+async function startLandingAuth() {
+  if (state.authStarted) return;
+  state.authStarted = true;
+  state.restoringMerchant = true;
+  const stopMaster = onAuthStateChanged(auth, user => {
+    if (state.restoringMerchant || state.merchant || state.loggingOut || state.disposed) return;
+    void showMasterSession(user);
+  });
+  window.addEventListener("pagehide", () => {
+    state.disposed = true;
+    ++state.authEpoch;
+    stopMaster();
+    state.stopProfile?.();
+    state.stopMerchant?.();
+    // Navigation keeps Firebase Auth and the locator; only Logout ends them.
+    View.renderGuest();
+  });
+  window.addEventListener("pageshow", event => {
+    if (event.persisted) window.location.reload();
+  });
+  try {
+    const merchant = await restoreMerchantSession();
+    state.restoringMerchant = false;
+    if (state.loggingOut || state.disposed) return;
+    if (merchant) showMerchantSession(merchant);
+    else {
+      await auth.authStateReady();
+      if (!state.loggingOut && !state.disposed && !state.merchant) await showMasterSession(auth.currentUser);
+    }
+  } catch (error) {
+    state.restoringMerchant = false;
+    if (state.loggingOut || state.disposed) return;
+    state.user = state.profile = null;
+    View.renderGuest();
+    setMessage($("#loginMsg"), merchantErrorMessage(error));
+    Toast.show(merchantErrorMessage(error), "error");
+  }
 }
 
 function initModalTriggers() {
@@ -508,7 +616,7 @@ function initLoginForm() {
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    if (busy) return;
+    if (busy || state.loggingOut || state.disposed) return;
     setMessage(msg);
     const emailVal = email.value.trim();
     const bad = !EMAIL_RE.test(emailVal);
@@ -525,7 +633,10 @@ function initLoginForm() {
       // One authoritative Master directory lookup before choosing the auth
       // project. Disabled/malformed/network failures never fall back to Master.
       const merchant = await loginMerchant(emailVal, enteredPassword, { allowAgencyAccount: true });
+      if (state.disposed || state.loggingOut) return;
       if (merchant) {
+        // Also render before navigation, so browser Back never shows a guest snapshot.
+        showMerchantSession(merchant);
         Modal.close();
         window.location.assign(new URL("./public/admin.html", import.meta.url).href);
       } else {
@@ -622,12 +733,16 @@ function initProfileForm() {
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    if (!state.user) return;
+    // A tenant UID cannot authorize a write to the agency's users collection.
+    if (!state.user || state.merchant || state.loggingOut || auth.currentUser?.uid !== state.user.uid) return;
     setMessage(msg);
     setLoading(submit, true);
+    const ticket = state.authEpoch;
+    const uid = state.user.uid;
     try {
       const company = input.value.trim().slice(0, 80);
-      await AuthService.updateCompany(state.user.uid, company);
+      await AuthService.updateCompany(uid, company);
+      if (ticket !== state.authEpoch || state.merchant || state.disposed || auth.currentUser?.uid !== uid) return;
       state.profile = { ...(state.profile || {}), company };
       $("#dashCompany").textContent = company || "Not set";
       setMessage(msg, "Saved.", "success");
@@ -707,7 +822,7 @@ function initContactForm() {
       setMessage(msg, "Message sent — we'll get back to you within one business day.", "success");
       Toast.show(`Thanks, ${firstName(nameVal)}! Your message has been sent.`);
       // Re-apply prefill for signed-in users after reset
-      if (state.user) View.renderUser(state.user, state.profile);
+      renderCurrentSession();
     } catch (err) {
       console.warn("[SQySystems] Contact form error:", err.code || err);
       setMessage(msg, friendlyError(err));
@@ -719,13 +834,22 @@ function initContactForm() {
 }
 
 async function handleLogout() {
-  try {
-    await Promise.all([AuthService.logout(), logoutMerchant()]);
-    Toast.show("You have been logged out.");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  } catch (err) {
-    Toast.show(friendlyError(err), "error");
-  }
+  if (state.loggingOut) return;
+  state.loggingOut = true;
+  ++state.authEpoch;
+  state.stopProfile?.();
+  state.stopProfile = null;
+  state.stopMerchant?.();
+  state.stopMerchant = null;
+  state.merchant = null;
+  state.user = state.profile = null;
+  View.renderGuest();
+  const results = await Promise.allSettled([AuthService.logout(), logoutMerchant()]);
+  const failure = results.find(result => result.status === "rejected");
+  state.loggingOut = false;
+  if (failure) Toast.show(friendlyError(failure.reason), "error");
+  else Toast.show("You have been logged out.");
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 /* ============================================================
@@ -745,32 +869,8 @@ function init() {
     return;
   }
 
-  // Single source of truth for authentication state.
-  onAuthStateChanged(auth, async (user) => {
-    const ticket = ++state.authEpoch;
-    state.stopProfile?.();
-    state.stopProfile = null;
-    state.user = user;
-    $$("[data-sqy-admin]").forEach(el => { el.hidden = true; });
-
-    if (!user) {
-      state.profile = null;
-      View.renderGuest();
-      return;
-    }
-
-    // During sign-up the profile document is still being written; signUp handler renders afterwards.
-    if (state.signingUp) return;
-
-    await refreshProfile(user);
-    if (ticket !== state.authEpoch || auth.currentUser?.uid !== user.uid) return;
-    state.stopProfile = onSnapshot(doc(db, "users", user.uid), { includeMetadataChanges: true }, snapshot => {
-      if (ticket !== state.authEpoch || auth.currentUser?.uid !== user.uid || snapshot.metadata.fromCache || snapshot.metadata.hasPendingWrites) return;
-      state.profile = snapshot.exists() ? snapshot.data() : null;
-      View.renderUser(user, state.profile);
-    }, () => { if (ticket === state.authEpoch) $$("[data-sqy-admin]").forEach(el => { el.hidden = true; }); });
-    AuthService.touchLastLogin(user.uid).catch(() => {});
-  });
+  // Restore the verified tenant session as well as ordinary Master accounts.
+  void startLandingAuth();
 }
 
 init();

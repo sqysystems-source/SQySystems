@@ -1,3 +1,30 @@
+# Install the landing-session fix
+
+Deploy this complete `SQySystems-main` folder to the **SQySystems agency Vercel project**.
+The application changes are `app.js`, `index.html` and `public/js/tenant-bridge.js`.
+No dependency upgrades, database migration, rules publication, tenant API or bucket
+changes are required for this specific session fix.
+
+1. Deploy all files together to the agency project.
+2. Use the same canonical agency hostname for homepage and admin. Your configured
+   redirect to `www.sqysystems.com` is suitable. Firebase/sessionStorage sessions do
+   not transfer from the old `sqysystems.vercel.app` origin: sign in once on the
+   new hostname after changing domains.
+3. Log in with a mapped store account. The admin opens as before.
+4. Click ← SQySystems: homepage should show your email, store name and Logout.
+5. Refresh, then reopen the admin: no second password prompt in the same tab.
+6. Click Logout on the homepage: the store session ends too. Browser Back must
+   not reopen an authorized dashboard without fresh verification.
+
+The merchant view does not edit the agency company profile. That form needs
+an independent Master Auth session. The existing Master profile/roles/registered
+clients directory are not automatically changed by tenant login.
+
+Below is the general installation reference for new environments. Existing
+configured environments do not need to repeat bootstrap/rules steps for this fix.
+
+---
+
 # Deploy SQy Admin and dynamic merchant routing
 
 ## 1. Publish Master rules first
@@ -82,17 +109,15 @@ from the landing modal to the merchant page is same-origin and same-tab. Add the
 agency's production/staging hostnames to Master and tenant Auth authorized domains
 as appropriate; do not forward a password or token in a redirect URL.
 
-## 4. Move AURA into Master with one form save
+## 4. Manage AURA in Master
 
-The latest supplied `AURA_FIREBASE_CONFIG` is preserved in
-`public/js/tenant-config.js` as the fallback/seed for `kostas6603@gmail.com`.
+There is no hardcoded AURA configuration or fallback. The existing active
+`merchant_stores/kostas6603@gmail.com` connection remains authoritative.
 
-Inside SQy Admin → Store connections:
-
-1. Click **Use AURA seed**. This only pre-fills the drawer; it does not write yet.
-2. Verify the domain `https://www.sqysystemsdev.org`, project `test-db-f6315`, all
-   six web values and merchant email. Select plan/status.
-3. Click **Save connection**.
+Inside SQy Admin → Store connections, edit the existing record, or select
+Connect e-shop and enter the merchant email, store name, API origin and six
+public web config fields from the store's Firebase Console. The old AURA seed
+button is a legacy control and cannot recover removed config values.
 
 This writes the following shape to `merchant_stores/kostas6603@gmail.com`:
 
@@ -107,7 +132,7 @@ firebaseConfig: { apiKey, authDomain, projectId, storageBucket,
 updatedAt: server timestamp
 ```
 
-These values now override the fallback. Edit future keys/domain/plan/status
+These values are the only merchant mapping. Edit future keys/domain/plan/status
 inside SQy Admin; no frontend deployment is needed for a new dynamic connection.
 
 The public record intentionally contains no other private fields. A public caller
@@ -161,9 +186,8 @@ Disable blocks portal login/restore and locks an open merchant workspace through
 its directory listener. Enable makes the existing mapping available again.
 
 Delete removes the connection from the default list by setting status `deleted`.
-It deliberately retains a tombstone to block the AURA seed. Use the Deleted filter
-and Restore / Edit to reactivate it. Hard-deleting AURA's document from the Console
-would make the static fallback applicable again. Other tenant/customer/product
+It retains a restorable record. Use the Deleted filter and Restore / Edit to
+reactivate it. A missing document cannot enable a merchant session. Other tenant/customer/product
 or payment data is not deleted by removing a connection.
 
 Directory changes do not revoke the tenant's underlying Firebase Auth identity or
@@ -172,7 +196,7 @@ revoke its tenant Firestore role / credentials using the tenant's trusted tools.
 
 ## 8. Tests and real-project acceptance
 
-The included 35 isolated tests require Node 20+ (Node 24 was used) and no packages:
+The included 55 current isolated tests require Node 20+ (Node 24 was used) and no packages:
 
 ```sh
 npm test

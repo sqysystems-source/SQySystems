@@ -1,3 +1,38 @@
+# Landing merchant session fix — 17 October 2026
+
+Baseline: the complete uploaded `SQySystems-main (4).zip`.
+
+## Application changes
+
+- `app.js`: restore and watch the existing verified tenant session on homepage load.
+  Render connected store identity and merchant navigation without a second login
+  or automatic redirect on return. Preserve normal Master login and role monitoring.
+- Keep merchant profile data separate from Master profile permissions. Hide the
+  Master company editor for tenant sessions and guard its submit handler. Contact
+  messages from a merchant session do not falsely claim a Master UID.
+- Logout clears both Firebase sessions and the merchant locator; purge identity
+  and subscriptions immediately. Stale asynchronous Master profile reads cannot
+  replace the current merchant identity.
+- `index.html`: identify the agency-only company editor and add a merchant-session note.
+- `public/js/tenant-bridge.js`: stop watchers and hide tenant data on pagehide,
+  retain the real session during navigation, and reload a bfcache-restored page
+  for fresh verification. Do not activate a late login after navigation.
+
+## Verification and documentation
+
+- Added 12 current landing regression scenarios with real modules and mocked Firebase/DOM.
+- Updated routing test fixtures for the already removed AURA fallback.
+- Retained the obsolete wizard/static-directory suites as `.legacy.mjs` reference
+  files; they no longer run as current contract tests. Their original assumptions
+  already failed against the supplied source. Current routing/lifecycle cases use
+  the shared dynamic-directory harness.
+- Updated README/deployment guidance and included honest TEST_RESULTS.md.
+- No production dependency, Firebase configuration, rules or tenant data changed.
+
+---
+
+# Historical control-plane changes (precede removal of the local AURA fallback)
+
 # SQySystems Super-Admin Control Plane
 
 Baseline: all 30 supplied files in the latest `sqysystems(2).txt`.

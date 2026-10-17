@@ -72,6 +72,14 @@ export function startTenantBridge(callbacks) {
     if (started) throw new Error('Tenant bridge already started.');
     started = true;
     hooks = callbacks;
+    window.addEventListener('pagehide', () => {
+        navigating = true;
+        stopWatching?.();
+        lock();
+    });
+    window.addEventListener('pageshow', event => {
+        if (event.persisted) window.location.reload();
+    });
     lock();
     $('portal-retry').addEventListener('click', () => window.location.reload());
     $('admin-login-form').addEventListener('submit', async event => {
@@ -82,8 +90,12 @@ export function startTenantBridge(callbacks) {
         const password = $('admin-password').value;
         $('admin-password').value = '';
         loading('Γίνεται σύνδεση στο κατάστημά σας…');
-        try { activate(await loginMerchant(email, password)); }
+        try {
+            const session = await loginMerchant(email, password);
+            if (!navigating) activate(session);
+        }
         catch (error) {
+            if (navigating) return;
             lock();
             if (active) { stopWatching?.(); await logoutMerchant().catch(() => {}); }
             showLogin(error, active);
@@ -96,6 +108,7 @@ export function startTenantBridge(callbacks) {
         if (session) activate(session);
         else showLogin();
     }).catch(async error => {
+        if (navigating) return;
         lock();
         if (active) { stopWatching?.(); await logoutMerchant().catch(() => {}); }
         showLogin(error, active);
