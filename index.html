@@ -74,10 +74,10 @@
           software for ambitious businesses — from first concept to launch and beyond.
         </p>
         <div class="hero__cta reveal">
-          <a href="#contact" class="btn btn--primary btn--lg">
+          <button type="button" data-start-project class="btn btn--primary btn--lg">
             Start Your Project
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-          </a>
+          </button>
           <a href="#services" class="btn btn--outline btn--lg">Explore Services</a>
         </div>
 
@@ -110,7 +110,7 @@
               <li>E-commerce &amp; web platforms</li>
               <li>Performance &amp; SEO optimisation</li>
             </ul>
-            <a href="#contact" class="card__link">Discuss a project <span aria-hidden="true">→</span></a>
+            <button type="button" class="card__link" data-start-project="websites">Discuss a project <span aria-hidden="true">→</span></button>
           </article>
 
           <article class="card reveal">
@@ -124,7 +124,7 @@
               <li>Cloud &amp; Firebase integrations</li>
               <li>Process automation</li>
             </ul>
-            <a href="#contact" class="card__link">Discuss a project <span aria-hidden="true">→</span></a>
+            <button type="button" class="card__link" data-start-project="backend">Discuss a project <span aria-hidden="true">→</span></button>
           </article>
 
           <article class="card reveal">
@@ -138,7 +138,7 @@
               <li>Design systems &amp; branding</li>
               <li>Responsive, accessible layouts</li>
             </ul>
-            <a href="#contact" class="card__link">Discuss a project <span aria-hidden="true">→</span></a>
+            <button type="button" class="card__link" data-start-project="design">Discuss a project <span aria-hidden="true">→</span></button>
           </article>
         </div>
       </div>
@@ -315,6 +315,7 @@
 
           <article class="panel panel--accent">
             <h3>Your store workspace</h3>
+            <button type="button" class="btn btn--light" data-start-project>Request a project ↗</button>
             <p id="dashStoreName">Your store workspace is managed by SQySystems. Sign in to manage orders, products and settings.</p>
             <p>Your store data stays in its dedicated Firebase project.</p>
             <a class="btn btn--light" href="public/admin.html">Open Store Admin Panel</a>
@@ -458,6 +459,62 @@
 
   <!-- Toast notifications -->
   <div class="toast-region" id="toasts" aria-live="polite"></div>
+
+
+  <!-- Native dialog provides focus containment and Escape support. -->
+  <dialog id="projectWizardModal" class="project-wizard" aria-labelledby="pw-title">
+    <div class="pw-shell">
+      <aside class="pw-rail">
+        <a class="pw-wordmark" href="#" id="pw-brand">SQySystems<span>PROJECT STUDIO</span></a>
+        <div class="pw-rail-copy"><span class="pw-kicker">FROM AN IDEA TO WHAT'S NEXT</span><h2>A little clarity.<br>A better beginning.</h2><p>Tell us what you have in mind. We’ll shape the right solution around your business.</p></div>
+        <ol class="pw-progress" aria-label="Project builder progress">
+          <li data-pw-progress="0"><span>01</span><div>Choose your direction<small>The kind of project</small></div></li>
+          <li data-pw-progress="1"><span>02</span><div>Define the scope<small>The details that matter</small></div></li>
+          <li data-pw-progress="2"><span>03</span><div>Make it yours<small>Identity, style & timing</small></div></li>
+          <li data-pw-progress="3"><span>04</span><div>Review & connect<small>Your brief, ready to send</small></div></li>
+        </ol>
+        <p class="pw-rail-foot">Built around your ambition.<br>Engineered by SQySystems.</p>
+      </aside>
+      <div class="pw-main">
+        <header class="pw-header"><span id="pw-step-count">STEP 01 / 04</span><button type="button" id="pw-close" class="pw-close" aria-label="Close project builder">×</button></header>
+        <form id="projectWizardForm" novalidate>
+          <div id="pw-fields">
+            <section data-pw-step="0" aria-labelledby="pw-title">
+              <span class="pw-eyebrow">YOUR NEXT CHAPTER</span><h2 id="pw-title" tabindex="-1">What are we building?</h2><p class="pw-lead">Choose the direction that best fits your idea. We’ll take care of the right questions.</p>
+              <fieldset class="pw-choice-group"><legend class="sr-only">Solution category</legend><div id="pw-categories" class="pw-category-grid"></div></fieldset>
+              <p class="pw-hint">Not sure where your idea fits? Pick the closest match and tell us more in your notes.</p>
+            </section>
+            <section data-pw-step="1" aria-labelledby="pw-scope-title" hidden>
+              <span class="pw-eyebrow" id="pw-track-label">YOUR SOLUTION</span><h2 id="pw-scope-title" tabindex="-1">Let’s define the essentials.</h2><p class="pw-lead">A few details help us understand what your project needs.</p>
+              <fieldset class="pw-choice-group"><legend>Project type <span aria-hidden="true">*</span></legend><div id="pw-subtypes" class="pw-pill-grid"></div></fieldset>
+              <label class="pw-field"><span id="pw-profession-label">Business / industry *</span><input id="pw-profession" maxlength="200" required placeholder="e.g. Fashion, real estate, gastronomy, services"></label>
+              <label class="pw-field"><span id="pw-purpose-label">Products or services *</span><textarea id="pw-purpose" rows="3" maxlength="2000" required></textarea></label>
+              <label class="pw-field"><span id="pw-scale-label">Estimated products / pages *</span><select id="pw-scale" required><option value="">Choose an estimate</option><option value="1-20">1–20</option><option value="20-100">20–100</option><option value="100+">100+</option><option value="Not sure">Not sure yet</option></select></label>
+              <fieldset class="pw-choice-group"><legend>Key features <small>Optional · select all that apply</small></legend><div id="pw-features" class="pw-feature-grid"></div></fieldset>
+            </section>
+            <section data-pw-step="2" aria-labelledby="pw-identity-title" hidden>
+              <span class="pw-eyebrow">BRAND & PERSONALITY</span><h2 id="pw-identity-title" tabindex="-1">Give your idea an identity.</h2><p class="pw-lead">A name, a feeling and a little inspiration. Nothing needs to be final.</p>
+              <label class="pw-field"><span>Project name / desired domain *</span><input id="pw-project-name" maxlength="120" required placeholder="e.g. AURA Boutique or mybusiness.gr"></label>
+              <fieldset class="pw-choice-group"><legend>Preferred color direction *</legend><div id="pw-palettes" class="pw-palette-grid"></div></fieldset>
+              <label class="pw-field"><span>Custom colors or preferences <small>Optional</small></span><input id="pw-custom-colors" maxlength="240" placeholder="e.g. #213547, ivory, muted gold"></label>
+              <div class="pw-form-row"><label class="pw-field"><span>Overall aesthetic *</span><select id="pw-style" required><option value="">Choose a style</option><option>Minimalist</option><option>Luxury</option><option>Corporate</option><option>Bold</option></select></label><label class="pw-field"><span>Target launch *</span><select id="pw-timeline" required><option value="">Choose a timeline</option><option>Urgent / ASAP</option><option>1–3 Months</option><option>Flexible</option></select></label></div>
+              <label class="pw-field"><span>Anything else? <small>Optional</small></span><textarea id="pw-notes" rows="3" maxlength="3000" placeholder="Reference links, must-haves, existing website or anything on your mind…"></textarea></label>
+            </section>
+            <section data-pw-step="3" aria-labelledby="pw-review-title" hidden>
+              <span class="pw-eyebrow">READY WHEN YOU ARE</span><h2 id="pw-review-title" tabindex="-1">Your idea, beautifully briefed.</h2><p class="pw-lead">Review your project and tell us where to reach you.</p>
+              <div id="pw-review" class="pw-review"></div>
+              <div id="pw-account-badge" class="pw-account-badge" hidden></div>
+              <div id="pw-contact-fields" class="pw-form-row"><label class="pw-field"><span>Full name *</span><input id="pw-client-name" maxlength="100" autocomplete="name" required></label><label class="pw-field"><span>Email *</span><input id="pw-client-email" type="email" maxlength="254" autocomplete="email" required></label><label class="pw-field"><span>Company <small>Optional</small></span><input id="pw-company" maxlength="120" autocomplete="organization"></label><label class="pw-field"><span>Phone <small>Optional</small></span><input id="pw-phone" type="tel" maxlength="40" autocomplete="tel" placeholder="+30 …"></label></div>
+              <p class="pw-hint">We’ll use these details to discuss your request. Sending a brief creates no payment or commitment.</p>
+            </section>
+          </div>
+          <p id="pw-error" class="pw-error" role="alert" hidden></p>
+          <footer id="pw-footer" class="pw-footer"><button type="button" id="pw-back" class="pw-back" hidden>← Back</button><span class="pw-save-note">A thoughtful start. No commitment.</span><button type="submit" id="pw-next" class="btn btn--primary">Continue <span aria-hidden="true">→</span></button></footer>
+        </form>
+        <section id="pw-success" class="pw-success" aria-labelledby="pw-success-title" hidden><span class="pw-success-icon" aria-hidden="true">✓</span><span class="pw-eyebrow">BRIEF RECEIVED</span><h2 id="pw-success-title" tabindex="-1">Great things start here.</h2><p>Your project request is with our team. We’ll review your brief and contact you to discuss the next steps.</p><p id="pw-reference" class="pw-reference"></p><button id="pw-done" class="btn btn--primary" type="button">Back to SQySystems ↗</button><button id="pw-another" class="link-btn" type="button">Start another brief</button></section>
+      </div>
+    </div>
+  </dialog>
 
   <script type="module" src="app.js"></script>
 </body>

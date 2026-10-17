@@ -9,7 +9,7 @@ test('anonymous and ordinary Master users never start collection listeners',asyn
 });
 test('admin and superadmin can load protected Master collections once',async()=>{
  for(const role of ['admin','superadmin']){
-  const p=await harness({entry:'sqy-admin.js',masterSigned:true,masterRole:role});assert.equal(p.byId('admin-view').hidden,false);const lists=p.state.calls.filter(c=>c.type==='listen'&&['users','messages','client_payments','merchant_stores'].includes(c.path));assert.equal(lists.length,4);assert.ok(lists.every(c=>c.project===MASTER));assert.equal(p.byId('kpi-clients').textContent,'1');
+  const p=await harness({entry:'sqy-admin.js',masterSigned:true,masterRole:role});assert.equal(p.byId('admin-view').hidden,false);const lists=p.state.calls.filter(c=>c.type==='listen'&&['users','messages','project_requests','client_payments','merchant_stores'].includes(c.path));assert.equal(lists.length,5);assert.ok(lists.every(c=>c.project===MASTER));assert.equal(p.byId('kpi-clients').textContent,'1');
  }
 });
 test('ordinary or unsigned users cannot invoke protected mutations directly',async()=>{

@@ -33,6 +33,7 @@
         <button type="button" data-section="overview" class="nav-item active"><span aria-hidden="true">◈</span> Overview</button>
         <button type="button" data-section="clients" class="nav-item"><span aria-hidden="true">♧</span> Clients</button>
         <button type="button" data-section="messages" class="nav-item"><span aria-hidden="true">▤</span> Contact inbox <span id="nav-unread" class="nav-count">0</span></button>
+        <button type="button" data-section="requests" class="nav-item"><span aria-hidden="true">✳</span> Project requests <span id="nav-project-new" class="nav-count">0</span></button>
         <button type="button" data-section="stores" class="nav-item"><span aria-hidden="true">▧</span> Store connections</button>
       </nav>
       <div class="sidebar-note"><span class="status-dot"></span> Master workspace<p>Clients, requests and store connections in one place.</p></div>
@@ -61,6 +62,10 @@
               <div class="panel-head"><div><h2 id="messages-title">Contact inbox <span id="messages-count" class="count-pill">—</span></h2><p>Conversations started on your website.</p></div><label class="sr-only" for="ticket-filter">Filter contact tickets</label><select id="ticket-filter"><option value="all">All tickets</option><option value="unread">Unread</option><option value="read">Read</option><option value="resolved">Resolved</option></select></div>
               <div id="messages-list" class="ticket-list"></div>
             </section>
+            <section class="panel requests-panel" id="requests-panel" data-panel="requests" aria-labelledby="requests-title">
+              <div class="panel-head"><div><span class="eyebrow">FROM IDEA TO LAUNCH</span><h2 id="requests-title">Project requests <span id="requests-count" class="count-pill">—</span></h2><p>Structured briefs from your project studio.</p></div><label class="sr-only" for="request-filter">Filter project requests</label><select id="request-filter"><option value="all">All requests</option><option value="new">New</option><option value="in_review">In review</option><option value="approved">Approved</option><option value="archived">Archived</option></select></div>
+              <div id="requests-list" class="requests-list"></div>
+            </section>
             <section class="panel" id="stores-panel" data-panel="stores" aria-labelledby="stores-title">
               <div class="panel-head"><div><h2 id="stores-title">Store connections <span id="stores-count" class="count-pill">—</span></h2><p>Manage access and launch your next client store.</p></div><button id="use-aura-seed" class="button subtle small" type="button">Use AURA seed</button></div>
               <div class="panel-filter"><label for="store-filter" class="small muted">Show</label><select id="store-filter"><option value="current">Current connections</option><option value="active">Active</option><option value="disabled">Disabled</option><option value="deleted">Deleted</option><option value="all">All</option></select></div>
@@ -76,6 +81,13 @@
     </main>
   </div>
 
+  <dialog id="request-dialog" class="drawer request-drawer" aria-labelledby="request-detail-title">
+    <div class="dialog-header"><div><span class="eyebrow">PROJECT BRIEF</span><h2 id="request-detail-title">Project request</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="Close request details">×</button></div>
+    <div class="request-detail-body"><div id="request-detail-content"></div>
+      <section class="request-actions" aria-label="Request actions"><label>Request status<select id="request-status"><option value="new">New</option><option value="in_review">In review</option><option value="approved">Approved</option><option value="archived">Archived</option></select></label><button type="button" id="save-request-status" class="button primary">Update status</button><p class="help">Approved means the brief is accepted. Record an actual payment separately.</p>
+      <div class="request-conversions"><button type="button" id="request-to-payment" class="button subtle">Convert to paid order →</button><button type="button" id="request-to-store" class="button subtle">Connect e-shop →</button></div><p class="help">These actions prefill a form. Review the payment or store details before saving.</p><button type="button" id="delete-request" class="text-button danger">Delete this request</button></section>
+    </div>
+  </dialog>
   <dialog id="provision-dialog" class="drawer" aria-labelledby="provision-title">
     <div class="dialog-header"><div><span class="eyebrow">TENANT PROVISIONING</span><h2 id="provision-title">Connect an e-shop</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="Close connection form">×</button></div>
     <form id="provision-form" class="dialog-form">

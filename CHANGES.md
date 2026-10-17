@@ -1,3 +1,32 @@
+# Project configurator & project requests — 17 October 2026
+
+Baseline: the complete uploaded `SQySystems-main (5)(1).zip`.
+
+- Replaced the project CTA journey with a responsive native dialog: four solution
+  tracks, tailored scope questions, feature chips, palette swatches, style/timing,
+  full review and contact collection. General enquiries retain the contact form.
+- Added shared project enums/validation in `agency-model.js`, an isolated wizard
+  controller and a Master-only submission service. Account binding uses Master
+  Auth only; tenant-only clients submit their prefilled contact with `uid: null`.
+- Added live Project requests navigation/count, overview list, status/search filters
+  and complete request detail drawer in SQy Admin. Status edits and deletion use
+  server-checked admin mutations. All rendered answer text is escaped.
+- Added form-prefill conversions to manual paid orders and tenant connections,
+  without inventing payment amounts or creating records before explicit saving.
+- Added strict create validation and protected reads/status-only admin updates/
+  deletion for `project_requests` in Master rules. Existing collection access and
+  managed merchant session flow remain intact.
+- Added 18 project regression tests and expanded real Rules emulator scenarios.
+- Removed the duplicate `managed-auth.test.mjs` and `portal-lifecycle.test.mjs`
+  files accidentally reintroduced in the upload. They were byte-for-byte copies
+  of the retained `.legacy.mjs` archives and targeted the retired JSON wizard and
+  static fallback. Current auth/lifecycle tests remain active.
+- Updated deployment/testing documentation. No production dependencies upgraded.
+
+See PROJECT_REQUESTS.md for the document contract and operation details.
+
+---
+
 # Landing merchant session fix — 17 October 2026
 
 Baseline: the complete uploaded `SQySystems-main (4).zip`.

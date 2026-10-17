@@ -115,3 +115,69 @@ export function parseFirebaseSnippet(raw) {
     if (WEB_CONFIG_KEYS.some(key => !values[key])) throw new Error('The config must contain all six Firebase web fields.');
     return Object.fromEntries(WEB_CONFIG_KEYS.map(key => [key, values[key]]));
 }
+
+// Project request contract shared by the wizard, admin and validation tests.
+export const PROJECT_TRACKS = Object.freeze({
+    websites: {
+        label: 'Websites & E-Commerce', description: 'Custom storefronts, corporate websites & digital platforms', icon: '↗',
+        types: ['E-Commerce Store','Informative / Corporate Website','Booking / Service Platform','Landing Page / Portfolio'],
+        features: ['Viva Wallet / Online Payments','Multi-language (GR/EN)','Cloud Drive / R2 Media','Courier Tracking (ACS/BoxNow/ELTA)','Custom Admin Panel','SEO & Analytics'],
+        professionLabel: 'Your business / industry', purposeLabel: 'Products or services to showcase', purposeHint: 'What will you sell or present? Tell us what makes your business different.'
+    },
+    applications: {
+        label: 'Applications & Mobile / Web Apps', description: 'SaaS platforms, portals, iOS/Android & custom web applications', icon: '◫',
+        types: ['Web Application / SaaS','Client Portal / Dashboard','Mobile App','Internal Business Tool'],
+        features: ['User Auth & Roles','Real-time Database','Subscriptions / Payments','Notifications','File Storage'],
+        professionLabel: 'Business & target audience', purposeLabel: 'The problem your application should solve', purposeHint: 'Who will use it, and what should they be able to do?'
+    },
+    backend: {
+        label: 'Backend, Cloud & Business IT Systems', description: 'APIs, cloud architecture, integrations, automations & internal tools', icon: '⌘',
+        types: ['Database Migration','Custom API','Cloud Architecture','Automation / Integration','Internal IT System'],
+        features: ['Firebase / Cloud Architecture','Third-party Integrations','Workflow Automation','Data Migration','Monitoring & Security'],
+        professionLabel: 'Business / industry & existing systems', purposeLabel: 'Core deliverables & technical goals', purposeHint: 'What needs connecting, migrating or automating? Include your current tools if known.'
+    },
+    design: {
+        label: 'UI/UX & Brand Experience', description: 'Design systems, wireframes, redesigns & conversion optimization', icon: '✳',
+        types: ['Full Redesign','Design System','Wireframes / Prototype','Brand Experience','Conversion Optimization'],
+        features: ['User Research','Interactive Prototype','Responsive Design','Accessibility','Brand Guidelines'],
+        professionLabel: 'Business / industry & audience', purposeLabel: 'Core design deliverables', purposeHint: 'Describe the experience you want to improve and what success would look like.'
+    }
+});
+export const PROJECT_SCALES = Object.freeze(['1-20','20-100','100+','Not sure']);
+export const PROJECT_STYLES = Object.freeze(['Minimalist','Luxury','Corporate','Bold']);
+export const PROJECT_TIMELINES = Object.freeze(['Urgent / ASAP','1–3 Months','Flexible']);
+export const PROJECT_STATUSES = Object.freeze(['new','in_review','approved','archived']);
+export const PROJECT_STATUS_LABELS = Object.freeze({new:'New',in_review:'In review',approved:'Approved',archived:'Archived'});
+export const PROJECT_PALETTES = Object.freeze([
+    {name:'Minimal Dark & Slate',colors:['#121c2c','#5e718c','#c6d3e3']},
+    {name:'Clean White & Editorial',colors:['#f8f6f0','#c8c2b8','#252d36']},
+    {name:'Warm Earth & Luxury',colors:['#715143','#bb9170','#e9dccc']},
+    {name:'Vibrant Modern Tech',colors:['#6554d9','#43ccb2','#e4e0ff']}
+]);
+export function validateProjectRequest(input) {
+    if (!input || typeof input !== 'object') throw new Error('Complete your project details.');
+    const track = PROJECT_TRACKS[input.category];
+    if (!track || !Object.hasOwn(PROJECT_TRACKS,input.category)) throw new Error('Choose a solution category.');
+    if (!track.types.includes(input.subType)) throw new Error('Choose the type of project.');
+    if (!PROJECT_SCALES.includes(input.estimatedScale)) throw new Error('Choose an estimated scale.');
+    if (!PROJECT_STYLES.includes(input.aestheticStyle)) throw new Error('Choose a visual style.');
+    if (!PROJECT_TIMELINES.includes(input.timeline)) throw new Error('Choose a launch timeline.');
+    if (!Array.isArray(input.selectedFeatures) || input.selectedFeatures.length > track.features.length || new Set(input.selectedFeatures).size !== input.selectedFeatures.length || input.selectedFeatures.some(value=>!track.features.includes(value))) throw new Error('Choose valid features for your solution.');
+    const uid = input.uid == null ? null : text(input.uid,'Account UID',128);
+    const clientName=text(input.clientName,'Full name',100);
+    if (clientName.length < 2) throw new Error('Enter your full name (at least 2 characters).');
+    const clientPhone=text(input.clientPhone,'Phone',40,false);
+    if (clientPhone && !/^[+0-9().\s-]{5,40}$/.test(clientPhone)) throw new Error('Enter a valid phone number, or leave it empty.');
+    return {
+        uid, clientName, clientEmail:normalizeEmail(input.clientEmail), clientPhone, company:text(input.company,'Company',120,false),
+        category:input.category, subType:input.subType, profession:text(input.profession,'Business / industry',200),
+        productsOrServices:text(input.productsOrServices,'Project purpose / deliverables',2000), estimatedScale:input.estimatedScale,
+        selectedFeatures:[...input.selectedFeatures], projectName:text(input.projectName,'Project name / domain',120),
+        preferredColors:text(input.preferredColors,'Color preferences',300), aestheticStyle:input.aestheticStyle,
+        timeline:input.timeline, notes:text(input.notes,'Additional notes',3000,false)
+    };
+}
+export function projectPackageDetails(request) {
+    const track=PROJECT_TRACKS[request.category];
+    return `${request.projectName}\n${track?.label || request.category} · ${request.subType}\n${request.productsOrServices}`.slice(0,2000);
+}

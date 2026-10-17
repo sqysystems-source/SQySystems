@@ -1,13 +1,13 @@
 import { auth } from './firebase-config.js';
 import { signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js';
-import { startControlPlane, saveConnection, changeConnectionStatus, addPaidOrder, changeTicketStatus, deleteTicket } from './public/js/control-plane-data.js';
-import { normalizeEmail, WEB_CONFIG_KEYS, parseFirebaseSnippet, connectionVersion, ticketStatus, isPaidOrder, asMillis } from './public/js/agency-model.js';
+import { startControlPlane, saveConnection, changeConnectionStatus, addPaidOrder, changeTicketStatus, deleteTicket, changeProjectRequestStatus, deleteProjectRequest } from './public/js/control-plane-data.js';
+import { normalizeEmail, WEB_CONFIG_KEYS, parseFirebaseSnippet, connectionVersion, ticketStatus, isPaidOrder, asMillis, PROJECT_TRACKS, PROJECT_STATUS_LABELS, projectPackageDetails } from './public/js/agency-model.js';
 import { resolveMerchantStore } from './public/js/tenant-config.js';
 import { escapeHTML as h } from './public/js/sanitize.js';
 
 const $ = id => document.getElementById(id);
-const labels = { users:'clients', messages:'contact tickets', client_payments:'paid orders', merchant_stores:'store connections' };
-const state = { authorized:false, rows:{users:null,messages:null,client_payments:null,merchant_stores:null}, errors:new Set(), query:'', page:0, section:'overview' };
+const labels = { users:'clients', messages:'contact tickets', project_requests:'project requests', client_payments:'paid orders', merchant_stores:'store connections' };
+const state = { authorized:false, rows:{users:null,messages:null,project_requests:null,client_payments:null,merchant_stores:null}, errors:new Set(), query:'', page:0, section:'overview' };
 const date = value => asMillis(value) ? new Intl.DateTimeFormat('en-GB',{dateStyle:'medium'}).format(new Date(asMillis(value))) : '—';
 const money = value => new Intl.NumberFormat('el-GR',{style:'currency',currency:'EUR'}).format(value/100);
 const matches = (...values) => !state.query || values.some(value => String(value ?? '').toLowerCase().includes(state.query));
@@ -15,6 +15,7 @@ const byNewest = (a,b) => asMillis(b.createdAt || b.paidAt || b.updatedAt) - asM
 const badge = (value,label=value) => `<span class="badge ${h(value)}">${h(label)}</span>`;
 const empty = message => `<div class="empty">${h(message)}</div>`;
 const blankRow = (columns,message) => `<tr><td colspan="${columns}" class="empty">${h(message)}</td></tr>`;
+let selectedRequestId = null;
 let editingEmail = null;
 let editingVersion = null;
 let savingConnection = false;
@@ -38,6 +39,7 @@ function clientsOptions() {
     const options = new Map();
     for (const user of state.rows.users || []) if (user.email) options.set(String(user.email).toLowerCase(),user.displayName || user.company || user.email);
     for (const order of state.rows.client_payments || []) if (order.clientEmail) options.set(String(order.clientEmail).toLowerCase(),order.clientName || order.clientEmail);
+    for (const request of state.rows.project_requests || []) if(request.clientEmail) options.set(String(request.clientEmail).toLowerCase(),request.clientName || request.clientEmail);
     const selected = $('client-picker').value;
     $('client-picker').innerHTML = '<option value="">Select a client, or enter an email below</option>'+[...options].sort(([a],[b])=>a.localeCompare(b)).map(([email,name])=>`<option value="${h(email)}">${h(name)} · ${h(email)}</option>`).join('');
     $('client-picker').value = selected;
@@ -47,6 +49,7 @@ function renderKPIs() {
     const unread = (state.rows.messages || []).filter(item=>ticketStatus(item)==='unread').length;
     $('kpi-unread').textContent = state.rows.messages === null ? '—' : String(unread);
     $('nav-unread').textContent = String(unread);
+    $('nav-project-new').textContent=String((state.rows.project_requests || []).filter(item=>item.status==='new').length);
     $('kpi-paid').textContent = state.rows.client_payments === null ? '—' : String(state.rows.client_payments.filter(isPaidOrder).length);
     $('kpi-stores').textContent = state.rows.merchant_stores === null ? '—' : String(state.rows.merchant_stores.filter(store=>store.status==='active').length);
     $('live-status').innerHTML = `<span class="status-dot"></span> ${state.errors.size ? 'Needs attention' : Object.values(state.rows).some(rows=>rows===null) ? 'Connecting' : 'Live updates'}`;
@@ -78,6 +81,34 @@ function renderMessages() {
         return `<article class="ticket"><div class="ticket-top"><div class="ticket-author"><strong>${h(item.name || 'Website visitor')}</strong><span>${h(email)}</span></div>${badge(status)}</div><p>${h(item.message || '')}</p><div class="ticket-bottom"><time>${h(date(item.createdAt))}</time><div class="ticket-actions">${status!=='read'?`<button class="row-action" data-ticket-status="read" data-id="${h(item.id)}" type="button">Mark read</button>`:''}${status!=='resolved'?`<button class="row-action" data-ticket-status="resolved" data-id="${h(item.id)}" type="button">Resolve</button>`:''}<a class="row-action" href="mailto:${h(encodeURIComponent(email))}?subject=${encodeURIComponent('Re: Your SQySystems enquiry')}">Reply ↗</a><button class="row-action danger" data-delete-ticket="${h(item.id)}" type="button">Delete</button></div></div></article>`;
     }).join(''):empty(state.rows.messages===null?'Loading contact tickets…':'Your inbox is clear for this view.');
 }
+function renderRequests() {
+    const filter=$('request-filter').value;
+    const rows=(state.rows.project_requests || []).filter(item=>(filter==='all'||item.status===filter)&&matches(item.clientName,item.clientEmail,item.company,item.projectName,PROJECT_TRACKS[item.category]?.label,item.subType,item.profession)).sort(byNewest);
+    $('requests-count').textContent=String(state.rows.project_requests?.length ?? '—');
+    $('requests-list').innerHTML=rows.length?rows.map(item=>`<button class="request-card" type="button" data-request-id="${h(item.id)}"><span class="request-icon" aria-hidden="true">${h(PROJECT_TRACKS[item.category]?.icon || '↗')}</span><span class="request-summary"><span class="request-card-top"><strong>${h(item.projectName || 'Project request')}</strong>${badge(item.status,PROJECT_STATUS_LABELS[item.status] || item.status)}</span><span class="request-track">${h(PROJECT_TRACKS[item.category]?.label || item.category)} · ${h(item.subType)}</span><span class="request-meta">${h(item.clientName)} <span>·</span> ${h(item.clientEmail)} <span>·</span> ${h(date(item.createdAt))}</span></span><span class="request-arrow" aria-hidden="true">↗</span></button>`).join(''):empty(state.rows.project_requests===null?'Loading project briefs…':'No project requests in this view. New briefs will appear here automatically.');
+}
+function renderRequestDetails() {
+    if(!selectedRequestId || !$('request-dialog').open)return;
+    const row=(state.rows.project_requests || []).find(item=>item.id===selectedRequestId);
+    if(!row){$('request-dialog').close();$('request-detail-content').innerHTML='';selectedRequestId=null;return;}
+    $('request-detail-title').textContent=row.projectName || 'Project request';
+    $('request-status').value=row.status;
+    const group=(title,fields)=>`<section class="brief-group"><h3>${h(title)}</h3><dl>${fields.map(([label,value])=>`<div><dt>${h(label)}</dt><dd>${h(value || '—')}</dd></div>`).join('')}</dl></section>`;
+    $('request-detail-content').innerHTML=group('Client & account',[
+        ['Name',row.clientName],['Email',row.clientEmail],['Phone',row.clientPhone],['Company',row.company],['Account UID',row.uid || 'Guest / store contact (no Master account link)'],['Submitted',date(row.createdAt)],['Status',PROJECT_STATUS_LABELS[row.status] || row.status]
+    ])+group('Scope & deliverables',[
+        ['Solution',PROJECT_TRACKS[row.category]?.label || row.category],['Project type',row.subType],['Business / industry',row.profession],['Products / services / purpose',row.productsOrServices],['Estimated scale',row.estimatedScale]
+    ])+`<section class="brief-group"><h3>Selected features</h3><div class="brief-tags">${Array.isArray(row.selectedFeatures)&&row.selectedFeatures.length?row.selectedFeatures.map(feature=>`<span>${h(feature)}</span>`).join(''):'<span>To be discussed</span>'}</div></section>`+group('Brand & project identity',[
+        ['Project / domain',row.projectName],['Preferred colors',row.preferredColors],['Aesthetic',row.aestheticStyle],['Timeline',row.timeline],['Notes & references',row.notes]
+    ]);
+}
+function openRequest(id) {
+    if(!state.authorized || !(state.rows.project_requests || []).some(item=>item.id===id))return;
+    selectedRequestId=id;
+    if(!$('request-dialog').open)$('request-dialog').showModal();
+    renderRequestDetails();
+}
+const selectedRequest=()=>(state.rows.project_requests || []).find(item=>item.id===selectedRequestId);
 function renderStores() {
     const filter=$('store-filter').value;
     const rows=(state.rows.merchant_stores || []).filter(store=>
@@ -95,19 +126,20 @@ function renderPaid() {
     }).join(''):empty(state.rows.client_payments===null?'Loading paid clients…':'No paid client records yet. Add the first payment above.');
 }
 function renderAll() {
-    renderKPIs(); renderClients(); renderMessages(); renderStores(); renderPaid(); clientsOptions();
+    renderKPIs(); renderClients(); renderMessages(); renderRequests(); renderStores(); renderPaid(); clientsOptions(); renderRequestDetails();
 }
-function closeDialogs() { for (const id of ['provision-dialog','payment-dialog']) if ($(id).open) $(id).close(); }
+function closeDialogs() { for (const id of ['provision-dialog','payment-dialog','request-dialog']) if ($(id).open) $(id).close(); }
 function clearPrivateUI() {
     state.authorized=false;
-    state.rows={users:null,messages:null,client_payments:null,merchant_stores:null};
+    state.rows={users:null,messages:null,project_requests:null,client_payments:null,merchant_stores:null};
     state.errors.clear(); state.query=''; state.page=0;
     closeDialogs();
     $('provision-form').reset(); $('payment-form').reset();
+    selectedRequestId=null; $('request-detail-content').innerHTML=''; $('request-detail-title').textContent='Project request'; $('request-status').value='new'; $('nav-project-new').textContent='0'; $('requests-count').textContent='—';
     // reset() does not clear defaultValue-backed form contents or generated
     // HTML. Explicitly purge all private rows, selections and config values.
     document.querySelectorAll('#provision-dialog input, #provision-dialog textarea, #payment-dialog input, #payment-dialog textarea').forEach(el=>{el.value='';});
-    for(const id of ['clients-body','stores-body','messages-list','paid-list']) $(id).innerHTML='';
+    for(const id of ['clients-body','stores-body','messages-list','requests-list','paid-list']) $(id).innerHTML='';
     $('client-picker').innerHTML='<option value="">Select a client, or enter an email below</option>';
     $('identity-avatar').textContent='S';
     for(const id of ['identity-name','identity-role','master-email']) $(id).textContent='';
@@ -145,14 +177,16 @@ function populateConnection(email) {
     $('config-snippet').value='';
     $('provision-title').textContent=record?'Edit store connection':'Connect an e-shop';
 }
-function openProvision(email='') {
+function openProvision(email='',projectName='') {
     if (!state.authorized || savingConnection) return;
     populateConnection(email);
+    if(projectName && !currentStore(String(email).toLowerCase())) $('store-name').value=projectName.slice(0,80);
     if (!$('provision-dialog').open) $('provision-dialog').showModal();
 }
-function openPayment() {
+function openPayment(request=null) {
     if (!state.authorized || savingPayment) return;
     $('payment-form').reset();notice('',false,'payment-error');
+    $('payment-email').value=request?.clientEmail || ''; $('payment-name').value=request?.clientName || ''; $('payment-package').value=request?.clientEmail?projectPackageDetails(request):''; $('payment-amount').value='';
     const now=new Date();$('payment-date').value=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
     $('payment-dialog').showModal();
 }
@@ -160,7 +194,8 @@ function selectSection(section) {
     state.section=section;
     document.querySelectorAll('[data-section]').forEach(button=>button.classList.toggle('active',button.dataset.section===section));
     document.querySelectorAll('[data-panel]').forEach(panel=>{panel.hidden=section!=='overview'&&panel.dataset.panel!==section;});
-    const titles={overview:['Overview','Agency overview'],clients:['Clients','Your client directory'],messages:['Contact inbox','Conversations that matter'],stores:['Store connections','Connected client stores']};
+    document.querySelector('.split-layout').classList.toggle('requests-focused',section==='requests');
+    const titles={overview:['Overview','Agency overview'],clients:['Clients','Your client directory'],messages:['Contact inbox','Conversations that matter'],requests:['Project requests','Ideas ready for your attention'],stores:['Store connections','Connected client stores']};
     $('page-label').textContent=titles[section][0];$('page-title').textContent=titles[section][1];
 }
 async function rowAction(button,work,message) {
@@ -186,6 +221,23 @@ $('sqy-logout').addEventListener('click',performLogout);
 $('sqy-mobile-logout').addEventListener('click',performLogout);
 $('switch-master-account').addEventListener('click',performLogout);
 $('global-search').addEventListener('input',()=>{state.query=$('global-search').value.trim().toLowerCase();state.page=0;if(state.authorized)renderAll();});
+$('request-filter').addEventListener('change',()=>{if(state.authorized)renderRequests();});
+$('save-request-status').addEventListener('click',()=>{
+    const row=selectedRequest();if(!row)return;
+    void rowAction($('save-request-status'),()=>changeProjectRequestStatus(row.id,$('request-status').value),'Project request status updated.');
+});
+$('request-to-payment').addEventListener('click',()=>{
+    const row=selectedRequest();if(!state.authorized||!row)return;
+    $('request-dialog').close();openPayment(row);
+});
+$('request-to-store').addEventListener('click',()=>{
+    const row=selectedRequest();if(!state.authorized||!row)return;
+    $('request-dialog').close();openProvision(row.clientEmail,row.projectName);
+});
+$('delete-request').addEventListener('click',()=>{
+    const row=selectedRequest();if(!row||!window.confirm('Permanently delete this project request?'))return;
+    void rowAction($('delete-request'),()=>deleteProjectRequest(row.id),'Project request deleted.');
+});
 $('ticket-filter').addEventListener('change',()=>{if(state.authorized)renderMessages();});
 $('store-filter').addEventListener('change',()=>{if(state.authorized)renderStores();});
 $('clients-prev').addEventListener('click',()=>{if(state.authorized){state.page=Math.max(0,state.page-1);renderClients();}});
@@ -224,6 +276,7 @@ document.addEventListener('click',event=>{
     const nav=event.target.closest('[data-section]');if(nav){selectSection(nav.dataset.section);return;}
     if(event.target.closest('[data-new-connection]')){openProvision();return;}
     const setup=event.target.closest('[data-setup-email]');if(setup){openProvision(setup.dataset.setupEmail);return;}
+    const request=event.target.closest('[data-request-id]');if(request){openRequest(request.dataset.requestId);return;}
     const edit=event.target.closest('[data-edit-store]');if(edit){openProvision(edit.dataset.editStore);return;}
     const toggle=event.target.closest('[data-toggle-store]');if(toggle){const row=currentStore(toggle.dataset.toggleStore);if(row)void rowAction(toggle,()=>changeConnectionStatus(row.id,row.status==='active'?'disabled':'active',connectionVersion(row)),'Connection status updated.');return;}
     const remove=event.target.closest('[data-delete-store]');if(remove){const row=currentStore(remove.dataset.deleteStore);if(row&&window.confirm(`Delete the connection for ${row.merchantEmail}? Portal access will stop. Store data stays intact.`))void rowAction(remove,()=>changeConnectionStatus(row.id,'deleted',connectionVersion(row)),'Connection removed from the current directory.');return;}

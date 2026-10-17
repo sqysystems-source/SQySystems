@@ -1,7 +1,7 @@
 // Run only through npm run test:rules. Never points at a production project.
 import {readFileSync} from 'node:fs';
 import {initializeTestEnvironment,assertSucceeds,assertFails} from '@firebase/rules-unit-testing';
-import {doc,collection,getDoc,getDocs,setDoc,updateDoc,deleteDoc,serverTimestamp,Timestamp} from 'firebase/firestore';
+import {doc,collection,query,where,getDoc,getDocs,setDoc,updateDoc,deleteDoc,serverTimestamp,Timestamp} from 'firebase/firestore';
 if(!process.env.FIRESTORE_EMULATOR_HOST) throw new Error('Start the Firestore emulator with npm run test:rules.');
 const [host,port]=process.env.FIRESTORE_EMULATOR_HOST.split(':');
 if(!['127.0.0.1','localhost'].includes(host))throw new Error('Rules tests must use a local emulator.');
@@ -57,5 +57,28 @@ try{
  await assertFails(getDocs(collection(anon,'client_payments')));
  await assertSucceeds(getDocs(collection(admin,'client_payments')));
  await assertFails(setDoc(doc(admin,'client_payments/invalid'),{...paid,amountCents:'70000'}));
+ // Structured briefs: public create, protected reads and status-only admin edits.
+ const brief=()=>({uid:null,clientName:'Guest Client',clientEmail:'guest@example.com',clientPhone:'+30 6901234567',company:'Studio',category:'websites',subType:'E-Commerce Store',profession:'Retail',productsOrServices:'Fashion and accessories',estimatedScale:'20-100',selectedFeatures:['SEO & Analytics'],projectName:'Studio Shop',preferredColors:'Clean White & Editorial',aestheticStyle:'Minimalist',timeline:'Flexible',notes:'Reference links here',status:'new',createdAt:serverTimestamp()});
+ await assertSucceeds(setDoc(doc(anon,'project_requests/guest'),brief()));
+ await assertFails(getDoc(doc(anon,'project_requests/guest')));
+ await assertFails(getDocs(collection(client,'project_requests')));
+ await assertSucceeds(getDocs(collection(admin,'project_requests')));
+ for(const patch of [{uid:'client'},{status:'approved'},{notes:'x'.repeat(3001)},{clientEmail:'UPPER@EXAMPLE.COM'},{selectedFeatures:['Notifications']},{subType:'Mobile App'},{selectedFeatures:['SEO & Analytics','SEO & Analytics']},{private_key:'secret'},{createdAt:Timestamp.fromDate(new Date('2020-01-01'))}]){
+  await assertFails(setDoc(doc(anon,'project_requests/invalid'),{...brief(),...patch}));
+ }
+ const owner=env.authenticatedContext('client',{email:'client@example.com'}).firestore();
+ await assertSucceeds(setDoc(doc(owner,'project_requests/owned'),{...brief(),uid:'client',clientEmail:'client@example.com'}));
+ await assertSucceeds(getDoc(doc(owner,'project_requests/owned')));
+ await assertSucceeds(getDocs(query(collection(owner,'project_requests'),where('uid','==','client'))));
+ await assertFails(setDoc(doc(owner,'project_requests/spoofed'),{...brief(),uid:'another',clientEmail:'client@example.com'}));
+ await assertFails(setDoc(doc(owner,'project_requests/wrong-email'),{...brief(),uid:'client',clientEmail:'other@example.com'}));
+ await assertFails(updateDoc(doc(owner,'project_requests/owned'),{status:'approved',updatedAt:serverTimestamp()}));
+ await assertSucceeds(updateDoc(doc(admin,'project_requests/owned'),{status:'in_review',updatedAt:serverTimestamp()}));
+ await assertSucceeds(updateDoc(doc(admin,'project_requests/owned'),{status:'approved',updatedAt:serverTimestamp()}));
+ await assertFails(updateDoc(doc(admin,'project_requests/owned'),{status:'paid',updatedAt:serverTimestamp()}));
+ await assertFails(updateDoc(doc(admin,'project_requests/owned'),{clientEmail:'changed@example.com',updatedAt:serverTimestamp()}));
+ await assertFails(updateDoc(doc(admin,'project_requests/owned'),{createdAt:serverTimestamp(),updatedAt:serverTimestamp()}));
+ await assertFails(deleteDoc(doc(owner,'project_requests/owned')));
+ await assertSucceeds(deleteDoc(doc(admin,'project_requests/owned')));
  console.log('Firestore emulator allow/deny and validation checks passed.');
 }finally{await env.cleanup()}

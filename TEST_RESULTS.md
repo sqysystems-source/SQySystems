@@ -1,60 +1,75 @@
-# Verification — 17 October 2026
+# Project configurator verification — 17 October 2026
 
-## Result
+## Passed
 
-**55 current isolated tests passed; 0 failed, 0 skipped, 0 cancelled.** Node 24.
+**73 current isolated tests passed, 0 failed, 0 skipped, 0 cancelled.** Node 24.
 
-Command used for the complete final run:
+```sh
+npm test
+```
+
+The suites were also run sequentially with TAP output:
 
 ```sh
 node --experimental-vm-modules --test --test-concurrency=1 --test-reporter=tap tests/*.test.mjs
 ```
 
-The package's `npm test` also targets the current `*.test.mjs` suites.
+## New project coverage (18 cases)
 
-## New landing scenarios (12)
+- Valid complete model projection for all four solution tracks.
+- Invalid enums, wrong-track/duplicate features, spoofed/oversized fields.
+- Full guest wizard completion and Master-only storage across all four branches.
+- Step validation, Back navigation and preserving brand answers.
+- Clearing previous-track scope answers on category changes.
+- Auto-binding a Master account and keeping tenant-only UIDs unbound.
+- Removing account binding/prefill on logout while retaining the project draft.
+- Rejecting a spoofed Master UID/email in the submission service.
+- Preventing duplicate submission from repeated clicks.
+- Admin newest-first list, independent new counter, filters and global search.
+- Complete request details and escaping malicious HTML in answers.
+- Status updates and form-prefill conversions without fabricated payment records.
+- Admin-only mutations; clearing drawers/lists/listeners on role revocation.
+- Deleting only the selected request and closing its details.
+- Failed Firestore submission retains data and allows retry without false success.
 
-- Landing login → merchant admin → homepage → reload → merchant admin: only one tenant password login.
-- Direct admin login restored on homepage without Master login/profile reads.
-- A locator without actual Firebase Auth cannot authorize the homepage.
-- Merchant context cannot inherit a simultaneous Master superadmin role or write to Master profiles.
-- Ordinary Master account/profile updates remain available.
-- Master superadmin role removal hides privileged navigation.
-- Homepage Logout clears both Auth sessions, locator, identity and profile/directory listeners.
-- Disabled/deleted/missing connection revokes an open homepage merchant session.
-- Tenant role removal or routing changes invalidate the merchant view.
-- Directory network failure on return fails closed.
-- pagehide preserves session while clearing listeners; bfcache pageshow requests a reload.
-- A delayed Master profile result cannot replace a subsequent merchant identity.
+The existing 55 current cases also pass: managed merchant login/return/logout,
+Master/tenant separation, directory routing, provisioning, role gates, ticket and
+payment workflows, input safety, product helpers, local assets, JavaScript syntax
+and linking the actual ES module graph, including the new wizard/data modules.
 
-Existing current suites also cover dynamic routing, tenant-role gates, bad passwords,
-provisioning, payments, ticket changes, safe parsing, XSS escaping, static assets,
-JavaScript syntax and linking the real local ES-module graph.
+## Additional static checks
 
-## Test scope and old fixtures
+- Parsed index.html, sqy-admin.html and public/admin.html with lxml; IDs unique.
+- Checked all four wizard steps, five project CTA entry points and input labels.
+- Checked balanced strings/delimiters in Firestore rules. This is not a rules compiler.
 
-The tests execute real service/controller code using controlled DOM/Firebase mocks.
-Tenant feature modules are stubbed for initialization checks. No real credentials,
-emails, payments, bucket writes or production data were used.
+## Rules emulator suite included, not executed here
 
-The upload also contained obsolete wizard-era and static-fallback-era suites. They
-already failed against the provided managed-portal source. Their original contents
-are retained as `managed-auth.legacy.mjs` and `portal-lifecycle.legacy.mjs`, with the
-old `fixtures.mjs` and `portal-browser.mjs` as historical references; they are not
-current runnable acceptance tests. Current landing/routing lifecycle tests use
-`harness.mjs`. Active routing/control-plane assertions were updated for the actual
-no-fallback configuration rather than reintroducing a hardcoded AURA mapping.
+`tests/firestore-rules.emulator.mjs` now also exercises project guest creation,
+UID/email ownership binding, validation of status/length/features, guest and
+cross-account read denial, owner queries, admin status edits, immutable answers
+and creation time, and protected deletion. It runs only against a local demo
+emulator via `npm run test:rules`; never a production Firebase project.
 
-## Not run
+The Firebase test SDK, Firebase CLI/emulator dependencies and Chromium were not
+available in this environment. The emulator suite and real-browser rendering,
+keyboard/focus, responsive layout, bfcache behavior and live Firebase enforcement
+were not executed. The automated UI checks use a controlled DOM and Firebase mocks.
+No real emails, payments, production documents, rules or deployments were changed.
 
-No Chromium binary was available, so no real-browser visual or real bfcache test
-was performed. The pagehide/pageshow handlers were exercised in the harness.
-Firebase Rules emulator and live Firebase/Vercel/R2/Resend integration tests were
-not run. Rules and backend were not changed by this patch.
+## Legacy duplicate cleanup
 
-## Production acceptance
+The supplied ZIP reintroduced `managed-auth.test.mjs` and
+`portal-lifecycle.test.mjs` as byte-identical duplicates of their `.legacy.mjs`
+archives. They expected the retired JSON setup wizard or static store fallback
+and already failed before this work. The duplicates were removed; the preserved
+archives and old browser fixture are reference material, not current acceptance
+suites. Current auth/lifecycle scenarios remain in routing.test.mjs and
+landing-session.test.mjs.
 
-After deploying to the agency project, test the round trip on your canonical
-hostname in one tab. Changing between vercel.app, apex and www origins requires
-sign-in on the new origin. Also verify homepage Logout and a disabled connection
-using a test merchant, then restore its status after the check.
+## Live acceptance after deployment
+
+Publish Master rules first, deploy all source files, then test guest/Master/tenant
+submissions, request details/statuses/search and both conversion forms. Verify
+that payments require a real amount and explicit save, contact enquiries still
+work, and merchant login → admin → back to homepage → Logout remains intact.

@@ -2,7 +2,7 @@
 import { auth, db } from '../../firebase-config.js';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js';
 import { doc, collection, getDocFromServer, onSnapshot, runTransaction, addDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js';
-import { canManageAgency, normalizeEmail, validateProvisioning, validatePaidOrder, connectionVersion } from './agency-model.js';
+import { canManageAgency, normalizeEmail, validateProvisioning, validatePaidOrder, connectionVersion, PROJECT_STATUSES } from './agency-model.js';
 
 const accessError = () => new Error('This account does not have SQySystems administrator access.');
 export async function requireSuperAdmin() {
@@ -40,7 +40,7 @@ export function startControlPlane(callbacks) {
             callbacks.onAuthorized(user, snapshot.data());
             const invalidate = error => { ++generation; clear(); callbacks.onError(error || accessError(), 'session'); };
             subscribe(doc(db,'users',user.uid), role => { if (!canManageAgency(role.data())) invalidate(); }, ticket, invalidate);
-            for (const name of ['users','messages','client_payments','merchant_stores']) {
+            for (const name of ['users','messages','project_requests','client_payments','merchant_stores']) {
                 subscribe(collection(db,name), data => callbacks.onData(name, data.docs.map(record => ({ ...record.data(), id: record.id }))), ticket, error => callbacks.onError(error,name));
             }
         } catch (error) {
@@ -91,4 +91,16 @@ export async function changeTicketStatus(id,status) {
 export async function deleteTicket(id) {
     await requireSuperAdmin();
     await deleteDoc(doc(db,'messages',id));
+}
+
+export async function changeProjectRequestStatus(id,status) {
+    await requireSuperAdmin();
+    if (!PROJECT_STATUSES.includes(status)) throw new Error('Choose a valid request status.');
+    if (typeof id !== 'string' || !id || id.includes('/')) throw new Error('Invalid request.');
+    await updateDoc(doc(db,'project_requests',id),{status,updatedAt:serverTimestamp()});
+}
+export async function deleteProjectRequest(id) {
+    await requireSuperAdmin();
+    if (typeof id !== 'string' || !id || id.includes('/')) throw new Error('Invalid request.');
+    await deleteDoc(doc(db,'project_requests',id));
 }

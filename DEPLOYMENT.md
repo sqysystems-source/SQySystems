@@ -1,3 +1,30 @@
+# Deploy the project configurator
+
+1. Publish this ZIP's root `firestore.rules` to the **SQySystems Master project
+   `sqysystems-faa0e` first**. The new `project_requests` rules are required for
+   public submission and the protected admin listener. Do not apply Master rules
+   to AURA or another tenant project.
+2. Deploy the complete folder to the **agency Vercel project** with the existing
+   static configuration. Include both new modules `public/js/project-wizard.js`
+   and `public/js/project-request-data.js` along with the changed shared models.
+3. Deploy as a complete tree. Remove stale duplicate `tests/managed-auth.test.mjs`
+   and `tests/portal-lifecycle.test.mjs` if merging into an existing checkout; their
+   original contents are retained under `.legacy.mjs` names. No dependency change
+   or database migration is needed. The new collection is created on first submit.
+4. On the canonical agency hostname, test one guest brief per track. Verify its
+   entry in SQy Admin → Project requests, open the details and check all answers.
+5. Test a Master client submission (UID/email bound), a tenant-only merchant
+   submission (contact prefilled, UID null), statuses, search/filter, deletion,
+   and both conversion forms. Verify that opening a payment form does not record
+   a payment and that no amount is prefilled.
+6. Recheck login → admin → back to website, and Logout. Existing R2/API CORS and
+   domain setup remain separate from this frontend/rules change.
+
+See PROJECT_REQUESTS.md and TEST_RESULTS.md. Existing environments do not need to
+repeat the older administrator bootstrap guidance below.
+
+---
+
 # Install the landing-session fix
 
 Deploy this complete `SQySystems-main` folder to the **SQySystems agency Vercel project**.
@@ -196,7 +223,7 @@ revoke its tenant Firestore role / credentials using the tenant's trusted tools.
 
 ## 8. Tests and real-project acceptance
 
-The included 55 current isolated tests require Node 20+ (Node 24 was used) and no packages:
+The included 73 current isolated tests require Node 20+ (Node 24 was used) and no packages:
 
 ```sh
 npm test

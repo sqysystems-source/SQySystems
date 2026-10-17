@@ -14,6 +14,7 @@
  *   7. Controllers      – forms (login, signup, profile, contact)
  *   8. Bootstrap        – wires everything and starts onAuthStateChanged
  */
+import { createProjectWizard } from "./public/js/project-wizard.js";
 import { auth, db, isFirebaseConfigured } from "./firebase-config.js";
 import { findMerchantStore } from "./public/js/merchant-directory.js";
 import { canManageAgency } from "./public/js/agency-model.js";
@@ -415,6 +416,16 @@ const MessageService = {
 /* ============================================================
    6. View — renders guest / authenticated state
    ============================================================ */
+let projectWizard = null;
+function wizardIdentity() {
+  if (!state.user) return null;
+  const user=state.user, profile=state.profile;
+  return {uid:!state.merchant && auth.currentUser?.uid===user.uid?user.uid:null,clientName:profile?.displayName || user.displayName || user.email.split("@")[0],clientEmail:user.email,company:profile?.company || ""};
+}
+function initProjectWizard() {
+  projectWizard = createProjectWizard({getIdentity:wizardIdentity});
+  return projectWizard;
+}
 const View = {
   renderGuest() {
     $$("[data-guest-only]").forEach((el) => (el.hidden = false));
@@ -427,6 +438,8 @@ const View = {
     $("#merchantProfileNote").hidden = true;
     $("#navWelcome").textContent = "";
     $$("[data-sqy-admin]").forEach(el => { el.hidden = true; });
+
+    projectWizard?.refreshIdentity();
 
     // Remove contact-form values that were auto-filled from the previous user's account
     $$("#contactForm [data-prefilled]").forEach((input) => {
@@ -457,6 +470,8 @@ const View = {
     $("#dashSince").textContent = formatDate(profile?.createdAt || user.metadata?.creationTime);
     $("#dashUid").textContent = user.uid;
     $("#companyInput").value = profile?.company || "";
+
+    projectWizard?.refreshIdentity();
 
     // Pre-fill the contact form for signed-in users (never overwrite what they typed)
     const cName = $("#contactName");
@@ -862,6 +877,7 @@ function init() {
   initSignupForm();
   initProfileForm();
   initContactForm();
+  initProjectWizard();
   View.renderGuest();
 
   if (!isFirebaseConfigured) {

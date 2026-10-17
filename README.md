@@ -1,3 +1,21 @@
+# SQySystems Project Studio
+
+Updated from **`SQySystems-main (5)(1).zip`** with an interactive project builder
+and live request management in SQy Admin. The managed merchant session fix remains.
+
+- Hero, service and client-dashboard project buttons open the four-stage studio.
+- Guests submit contact details; Master clients auto-bind to their signed-in
+  account. Tenant-only merchants remain separate from Master Auth.
+- Requests are saved to Master `project_requests` and appear live in the protected
+  Project requests view, with full answers, status actions and payment/store form
+  prefill. The general contact form stays available.
+
+**Publish the updated Master rules before deploying this version.**
+See [DEPLOYMENT.md](DEPLOYMENT.md), [PROJECT_REQUESTS.md](PROJECT_REQUESTS.md),
+[CHANGES.md](CHANGES.md) and [TEST_RESULTS.md](TEST_RESULTS.md).
+
+---
+
 # SQySystems — Agency Control Plane
 
 Complete integrated project based on the supplied **`SQySystems-main (4).zip`**, including the landing-session fix.
@@ -136,7 +154,7 @@ styles that previously made the labels dark.
 npm test
 ```
 
-**55 isolated tests passed** (Node 24): both login entry points, landing-session
+**73 current isolated tests passed** (Node 24): both login entry points, landing-session
 round trips, dynamic routing with no local fallback, fail-closed disabled/deleted/error cases, role gates and
 revocation, provisioning/optimistic edits, manual payments, paid-client setup,
 message lifecycle, HTML escaping, safe snippet parsing, navigation visibility,

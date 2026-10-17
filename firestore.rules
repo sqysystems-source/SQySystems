@@ -45,6 +45,50 @@ service cloud.firestore {
         && data.paidAt is timestamp && data.createdBy is string && data.createdAt is timestamp
         && data.updatedAt == request.time;
     }
+    function projectText(value, maxLength, required) {
+      return value is string && value.size() <= maxLength && (!required || value.size() > 0);
+    }
+    function validProjectScope(d) {
+      return d.selectedFeatures is list && d.selectedFeatures.size() <= 6
+        && d.selectedFeatures.toSet().size() == d.selectedFeatures.size()
+        && (
+        (d.category == 'websites' && d.subType in ['E-Commerce Store','Informative / Corporate Website','Booking / Service Platform','Landing Page / Portfolio']
+          && d.selectedFeatures.hasOnly(['Viva Wallet / Online Payments','Multi-language (GR/EN)','Cloud Drive / R2 Media','Courier Tracking (ACS/BoxNow/ELTA)','Custom Admin Panel','SEO & Analytics']))
+        ||         (d.category == 'applications' && d.subType in ['Web Application / SaaS','Client Portal / Dashboard','Mobile App','Internal Business Tool']
+          && d.selectedFeatures.hasOnly(['User Auth & Roles','Real-time Database','Subscriptions / Payments','Notifications','File Storage']))
+        ||         (d.category == 'backend' && d.subType in ['Database Migration','Custom API','Cloud Architecture','Automation / Integration','Internal IT System']
+          && d.selectedFeatures.hasOnly(['Firebase / Cloud Architecture','Third-party Integrations','Workflow Automation','Data Migration','Monitoring & Security']))
+        ||         (d.category == 'design' && d.subType in ['Full Redesign','Design System','Wireframes / Prototype','Brand Experience','Conversion Optimization']
+          && d.selectedFeatures.hasOnly(['User Research','Interactive Prototype','Responsive Design','Accessibility','Brand Guidelines']))
+        );
+    }
+    function validProjectRequest(d) {
+      return d.keys().hasOnly(['uid','clientName','clientEmail','clientPhone','company','category','subType','profession','productsOrServices','estimatedScale','selectedFeatures','projectName','preferredColors','aestheticStyle','timeline','notes','status','createdAt'])
+        && d.keys().hasAll(['uid','clientName','clientEmail','clientPhone','company','category','subType','profession','productsOrServices','estimatedScale','selectedFeatures','projectName','preferredColors','aestheticStyle','timeline','notes','status','createdAt'])
+        && projectText(d.clientName,100,true) && d.clientName.size() >= 2
+        && validEmail(d.clientEmail) && d.clientEmail == d.clientEmail.lower()
+        && projectText(d.clientPhone,40,false)
+        && (d.clientPhone == '' || d.clientPhone.matches('^[+0-9().\\s-]{5,40}$'))
+        && projectText(d.company,120,false)
+        && (d.uid == null || (d.uid is string && d.uid.size() <= 128 && isOwner(d.uid)
+          && d.clientEmail == request.auth.token.email.lower()))
+        && validProjectScope(d)
+        && projectText(d.profession,200,true) && projectText(d.productsOrServices,2000,true)
+        && d.estimatedScale in ['1-20','20-100','100+','Not sure']
+        && projectText(d.projectName,120,true) && projectText(d.preferredColors,300,true)
+        && d.aestheticStyle in ['Minimalist','Luxury','Corporate','Bold'] && d.timeline in ['Urgent / ASAP','1–3 Months','Flexible']
+        && projectText(d.notes,3000,false) && d.status == 'new' && d.createdAt == request.time;
+    }
+    match /project_requests/{requestId} {
+      allow create: if validProjectRequest(request.resource.data);
+      allow read: if isSuperAdmin() || (resource.data.uid != null && isOwner(resource.data.uid));
+      // Submitted answers, client identity and creation time are immutable.
+      allow update: if isSuperAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt'])
+        && request.resource.data.status in ['new','in_review','approved','archived']
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if isSuperAdmin();
+    }
     match /users/{userId} {
       allow get: if isOwner(userId) || isSuperAdmin();
       allow list: if isSuperAdmin();
@@ -83,7 +127,7 @@ service cloud.firestore {
     }
     match /merchant_stores/{storeId} {
       // Only public WEB configuration is stored in this get-readable record.
-      // The router must be able to confirm a missing doc before using its seed.
+      // The router must be able to confirm whether a managed connection exists.
       allow get: if true;
       allow list: if isSuperAdmin();
       allow create, update: if isSuperAdmin() && validStore(request.resource.data, storeId);
